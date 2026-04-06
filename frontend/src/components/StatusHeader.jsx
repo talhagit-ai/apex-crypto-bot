@@ -18,8 +18,10 @@ export function StatusHeader({ state, status, lastPing }) {
   const killed   = state?.risk?.killed      ?? false;
   const reduced  = (state?.risk?.riskReduction ?? 1) < 1;
 
-  const spotEUR    = state?.realBalances?.spotEUR    ?? null;
-  const futuresUSD = state?.realBalances?.futuresUSD ?? null;
+  const spotAmt    = state?.realBalances?.spotEUR      ?? null;
+  const spotCur    = state?.realBalances?.spotCurrency ?? 'EUR';
+  const futuresUSD = state?.realBalances?.futuresUSD   ?? null;
+  const spotSymbol = spotCur === 'USD' ? '$' : '€';
 
   const pnlColor = pnl >= 0 ? '#22d3ee' : '#f87171';
   const lastStr  = lastPing ? new Date(lastPing).toLocaleTimeString('nl-NL') : '—';
@@ -41,7 +43,7 @@ export function StatusHeader({ state, status, lastPing }) {
           <div style={styles.balanceItem}>
             <span style={styles.balanceLabel}>Spot</span>
             <span style={styles.balanceValue}>
-              {spotEUR !== null ? `€${spotEUR.toFixed(2)}` : '—'}
+              {spotAmt !== null ? `${spotSymbol}${spotAmt.toFixed(2)}` : '—'}
             </span>
           </div>
           <div style={{ color: '#334155', fontSize: 16, margin: '0 6px' }}>|</div>

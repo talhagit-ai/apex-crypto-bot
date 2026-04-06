@@ -48,11 +48,20 @@ let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
 async function refreshBalances() {
   try {
     const raw = await kraken.api.balance();
-    log.info('Kraken balance raw', { raw: JSON.stringify(raw).slice(0, 200) });
-    // Try all common EUR field names
-    const eur = parseFloat(raw?.ZEUR || raw?.EUR || raw?.XEUR || 0);
-    realBalances.spotEUR = eur;
-    log.info(`Spot balance: €${eur.toFixed(2)}`);
+    const eur  = parseFloat(raw?.ZEUR || raw?.EUR  || 0);
+    const usd  = parseFloat(raw?.ZUSD || raw?.USD  || 0);
+    // Use whichever currency has funds
+    if (eur > 0) {
+      realBalances.spotEUR      = eur;
+      realBalances.spotCurrency = 'EUR';
+    } else if (usd > 0) {
+      realBalances.spotEUR      = usd;   // stored as spotEUR but actually USD
+      realBalances.spotCurrency = 'USD';
+    } else {
+      realBalances.spotEUR      = 0;
+      realBalances.spotCurrency = 'EUR';
+    }
+    log.info(`Spot balance: ${realBalances.spotCurrency} ${realBalances.spotEUR.toFixed(2)}`);
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });
   }
