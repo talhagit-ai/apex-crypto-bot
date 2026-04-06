@@ -1,0 +1,23 @@
+{
+  "MIN_CONF": 4,
+  "MIN_RR": 1.8,
+  "PARTIAL1_R": 0.5,
+  "PARTIAL1_PCT": 0.25,
+  "PARTIAL2_R": 1.0,
+  "PARTIAL2_PCT": 0.25,
+  "TRAIL_R": 1.2,
+  "TRAIL_ATR": 1.5,
+  "MAX_BARS": 40,
+  "CONF_RISK": {
+    "4": 0.010,
+    "5": 0.016,
+    "6": 0.024
+  },
+  "assets": {
+    "BTCUSDT": { "slM": 1.8, "tpM": 4.8 },
+    "ETHUSDT": { "slM": 1.5, "tpM": 4.2 },
+    "SOLUSDT": { "slM": 1.7, "tpM": 4.5 },
+    "XRPUSDT": { "slM": 1.5, "tpM": 4.0 },
+    "ADAUSDT": { "slM": 1.5, "tpM": 3.4 }
+  }
+}
