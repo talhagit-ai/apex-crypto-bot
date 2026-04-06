@@ -68,6 +68,27 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// REST: test Kraken API connectivity + balance
+app.get('/api/test', async (_req, res) => {
+  const results = {};
+  try {
+    const ticker = await kraken.getTicker('BTCUSDT');
+    results.ticker = { ok: true, btcAsk: ticker.askPrice };
+  } catch (e) {
+    results.ticker = { ok: false, err: e.message };
+  }
+  try {
+    const bal = await kraken.api.balance();
+    const eurBal = bal?.ZEUR ?? bal?.EUR ?? '?';
+    results.balance = { ok: true, EUR: eurBal };
+  } catch (e) {
+    results.balance = { ok: false, err: e.message };
+  }
+  results.enableShorts = ENABLE_SHORTS;
+  results.tickCount = tickCount;
+  res.json(results);
+});
+
 // REST: get current state
 app.get('/state', (_req, res) => {
   const prices = buffer.currentPrices();
