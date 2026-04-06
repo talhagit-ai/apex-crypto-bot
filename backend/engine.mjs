@@ -213,7 +213,7 @@ export class TradingEngine {
 
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
-        if (bearRegime) {
+        if (bearRegime && this.opts.enableShorts) {
           const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts);
           if (sig) candidates.push({ asset: assetCfg, sig });
           else log.info(`Skip ${asset.id} SHORT: signal rejected`);

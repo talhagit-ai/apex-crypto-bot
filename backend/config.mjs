@@ -54,6 +54,7 @@ export const MAX_RISK_PER_TRADE  = 0.025;  // 2.5% max risk per single trade
 
 // ── Confidence-Based Risk Sizing ───────────────────────────────
 export const CONF_RISK = {
+  3: 0.006,   // 0.6% risk at 3/6 (minimum confluence — small size)
   4: 0.010,   // 1.0% risk at 4/6 confidence
   5: 0.016,   // 1.6% risk at 5/6
   6: 0.024,   // 2.4% risk at 6/6 (full confidence — only on perfect setups)
@@ -67,7 +68,7 @@ export const ADX_MIN    = 8;          // Min ADX for trending market (crypto tre
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
 export const REGIME_INTERVAL    = '60';   // 1-hour candles for regime filter
 export const HISTORY_BARS       = 150;    // Rolling buffer size
-export const VWAP_WINDOW        = 288;    // 24h rolling VWAP (288 × 5min)
+export const VWAP_WINDOW        = 120;    // 10h rolling VWAP (fits in 150-bar buffer)
 
 // ── Peak Hours (UTC) ───────────────────────────────────────────
 export const PEAK_HOURS = [
