@@ -21,6 +21,7 @@ import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams } from './optimizer.mjs';
 import { KrakenFuturesClient } from './kraken-futures-client.mjs';
+import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -248,6 +249,7 @@ async function _syncOrders(prevPositions, barData) {
         log.signal(`REAL ORDER: SHORT ${assetId}`, { qty: pos.qty, entry: pos.entry });
         try {
           await futures.openShort(assetId, pos.qty);
+          notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
         } catch (err) {
           log.error(`Futures short failed for ${assetId}`, { err: err.message });
         }
@@ -259,7 +261,11 @@ async function _syncOrders(prevPositions, barData) {
           rr: (pos.tp - pos.entry) / Math.max(pos.entry - pos.sl, 1e-9),
         };
         const fill = await orders.openPosition(signal, pos.qty);
-        if (fill) { pos.entry = fill.fillPrice; pos.peak = fill.fillPrice; }
+        if (fill) {
+          pos.entry = fill.fillPrice;
+          pos.peak = fill.fillPrice;
+          notifyBuy(assetId, pos.qty, fill.fillPrice, pos.sl, pos.tp, signal.conf || 3);
+        }
       }
     }
   }
@@ -279,12 +285,20 @@ async function _syncOrders(prevPositions, barData) {
           log.signal(`REAL ORDER: COVER ${assetId}`, { qty: closeQty, reason });
           try {
             await futures.closeShort(assetId, closeQty);
+            notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
           } catch (err) {
             log.error(`Futures cover failed for ${assetId}`, { err: err.message });
           }
+        } else if (exitTrade.side === 'PARTIAL1') {
+          notifyPartial(assetId, 1, exitTrade.price, exitTrade.pnl || 0);
+          await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
+        } else if (exitTrade.side === 'PARTIAL2') {
+          notifyPartial(assetId, 2, exitTrade.price, exitTrade.pnl || 0);
+          await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
         } else {
           log.signal(`REAL ORDER: SELL ${assetId}`, { qty: closeQty, reason });
-          await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
+          const result = await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
+          notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
         }
       }
     }
@@ -328,6 +342,7 @@ async function start() {
   });
 
   log.info('Bot is running. Waiting for bar closes...');
+  notifyStartup(CAPITAL, ASSETS.length);
 }
 
 // ── Graceful Shutdown ─────────────────────────────────────────
