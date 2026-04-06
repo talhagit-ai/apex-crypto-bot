@@ -4,13 +4,16 @@
 // ═══════════════════════════════════════════════════════════════
 
 import Database from 'better-sqlite3';
+import { mkdirSync } from 'fs';
 import { log } from './logger.mjs';
 
-const DB_PATH = 'db/apex.db';
+const DB_PATH = process.env.DB_PATH || 'db/apex.db';
 
 let db;
 
 export function initDB() {
+  // Ensure the directory exists (needed on Render and fresh installs)
+  mkdirSync(DB_PATH.replace(/\/[^/]+$/, ''), { recursive: true });
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
 
