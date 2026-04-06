@@ -385,7 +385,7 @@ async function start() {
   notifyStartup(CAPITAL, ASSETS.length);
 
   // Start Telegram AI chat polling
-  startTelegramChat(() => getFullState(buffer.currentPrices()));
+  await startTelegramChat(() => getFullState(buffer.currentPrices()));
 }
 
 // ── Graceful Shutdown ─────────────────────────────────────────

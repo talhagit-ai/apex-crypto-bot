@@ -183,7 +183,7 @@ async function pollTelegram() {
   if (!TOKEN || !pollingActive) return;
 
   try {
-    const url  = `https://api.telegram.org/bot${TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=20`;
+    const url  = `https://api.telegram.org/bot${TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=20&allowed_updates=["message"]`;
     const resp = await fetch(url, { signal: AbortSignal.timeout(25_000) });
     const data = await resp.json();
 
@@ -228,7 +228,7 @@ async function pollTelegram() {
  * Call this from server.mjs after startup.
  * @param {() => object} stateFn — returns current engine state
  */
-export function startTelegramChat(stateFn) {
+export async function startTelegramChat(stateFn) {
   getStateFn    = stateFn;
   pollingActive = true;
 
@@ -238,6 +238,19 @@ export function startTelegramChat(stateFn) {
   }
   if (!ANTHROPIC_KEY) {
     log.warn('Telegram AI chat disabled (ANTHROPIC_API_KEY not set) — notifications still work');
+  }
+
+  // Delete any webhook and clear conflicts before polling
+  try {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/deleteWebhook?drop_pending_updates=true`);
+    // Get current update_id to skip old messages
+    const resp = await fetch(`https://api.telegram.org/bot${TOKEN}/getUpdates?offset=-1`);
+    const data = await resp.json();
+    const updates = data.result || [];
+    if (updates.length > 0) lastUpdateId = updates[updates.length - 1].update_id;
+    log.info(`Telegram: cleared conflicts, starting from update_id ${lastUpdateId}`);
+  } catch (e) {
+    log.warn('Telegram pre-poll cleanup failed', { err: e.message });
   }
 
   log.info('Telegram AI chat polling started');
