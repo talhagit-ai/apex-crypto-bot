@@ -23,7 +23,7 @@ export const BYBIT_BASE_URL   = process.env.BYBIT_BASE_URL || '';
 export const MODE             = process.env.MODE || 'spot';
 
 // ── Capital & Position ─────────────────────────────────────────
-export const CAPITAL    = Number(process.env.CAPITAL) || 2000;
+export const CAPITAL    = Number(process.env.CAPITAL) || 100;
 export const MAX_POS    = 5;          // Max concurrent positions — verhoog mee als kapitaal groeit
 export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
 
