@@ -23,7 +23,6 @@ export function checkRegime(closes, highs, lows, regimeATR = 0.05) {
   return (
     e50[n] > e50[Math.max(0, n - SLOPE_BARS)]   // EMA50 rising
     && e8[n] > e21[n]                             // Short above medium
-    && closes[n] > e21[n]                         // Price above EMA21
     && adx > ADX_MIN                              // Trending
   );
 }
@@ -43,7 +42,6 @@ export function checkBearishRegime(closes, highs, lows, regimeATR = 0.05) {
   return (
     e50[n] < e50[Math.max(0, n - SLOPE_BARS)]   // EMA50 falling (macro downtrend)
     && e8[n] < e21[n]                             // Short below medium
-    && closes[n] < e21[n]                         // Price below EMA21
     && adx > ADX_MIN                              // Trending (not sideways)
   );
 }
@@ -74,7 +72,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const VWAP = vwap(highs, lows, closes, volumes, VWAP_WINDOW);
   const VR   = volumeRatio(volumes, 20);
 
-  if (ADX < ADX_MIN || cur < e50[n]) return null;
+  if (ADX < ADX_MIN) return null;
 
   const f1 = e8[n] > e13[n] && e13[n] > e21[n];  // EMA stack bull
   const f2 = cur > VWAP;                           // Above VWAP
