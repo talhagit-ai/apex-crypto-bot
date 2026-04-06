@@ -21,7 +21,7 @@ import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams } from './optimizer.mjs';
 import { KrakenFuturesClient } from './kraken-futures-client.mjs';
-import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup } from './telegram.mjs';
+import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, startTelegramChat } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -343,6 +343,9 @@ async function start() {
 
   log.info('Bot is running. Waiting for bar closes...');
   notifyStartup(CAPITAL, ASSETS.length);
+
+  // Start Telegram AI chat polling
+  startTelegramChat(() => engine.getState(buffer.currentPrices()));
 }
 
 // ── Graceful Shutdown ─────────────────────────────────────────
