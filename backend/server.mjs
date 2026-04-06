@@ -47,16 +47,21 @@ let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
 
 async function refreshBalances() {
   try {
-    const spotEUR = await kraken.getBalance();
-    realBalances.spotEUR = spotEUR;
+    const raw = await kraken.api.balance();
+    log.info('Kraken balance raw', { raw: JSON.stringify(raw).slice(0, 200) });
+    // Try all common EUR field names
+    const eur = parseFloat(raw?.ZEUR || raw?.EUR || raw?.XEUR || 0);
+    realBalances.spotEUR = eur;
+    log.info(`Spot balance: €${eur.toFixed(2)}`);
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });
   }
   try {
     const futuresUSD = await futures.getBalance();
     realBalances.futuresUSD = futuresUSD;
+    log.info(`Futures balance: $${futuresUSD.toFixed(2)}`);
   } catch (e) {
-    // Futures keys may not be set — silently skip
+    log.info('Futures balance unavailable', { err: e.message });
   }
   realBalances.lastUpdated = Date.now();
 }
@@ -122,6 +127,17 @@ app.get('/state', (_req, res) => {
 // REST: get recent trades
 app.get('/trades', (_req, res) => {
   res.json(engine.trades.slice(-200));
+});
+
+// REST: debug balances
+app.get('/api/balances', async (_req, res) => {
+  await refreshBalances();
+  try {
+    const raw = await kraken.api.balance();
+    res.json({ realBalances, rawKraken: raw });
+  } catch (e) {
+    res.json({ realBalances, error: e.message });
+  }
 });
 
 // ── Optimizer Endpoints ──────────────────────────────────────
