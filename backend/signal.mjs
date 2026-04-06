@@ -78,7 +78,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const f2 = cur > VWAP;                           // Above VWAP
   const f3 = RSI > 38 && RSI < 74;                 // RSI sweet spot
   const f4 = MH > MH1;                             // MACD rising
-  const f5 = VR >= 1.06;                           // Volume surge
+  const f5 = VR >= 0.85;                            // Volume active (crypto 24/7, no big surges needed)
   const f6 = RSI > RSI2 && RSI2 > RSI3;           // RSI accelerating up
 
   const conf    = [f1, f2, f3, f4, f5, f6].filter(Boolean).length;
@@ -145,7 +145,7 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const f2 = cur < VWAP;                           // Below VWAP
   const f3 = RSI > 26 && RSI < 62;                 // RSI not oversold yet
   const f4 = MH < MH1;                             // MACD falling
-  const f5 = VR >= 1.06;                           // Volume confirming move
+  const f5 = VR >= 0.85;                            // Volume active (crypto 24/7, no big surges needed)
   const f6 = RSI < RSI2 && RSI2 < RSI3;           // RSI accelerating down
 
   const conf    = [f1, f2, f3, f4, f5, f6].filter(Boolean).length;
