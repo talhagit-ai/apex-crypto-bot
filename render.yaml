@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: apex-crypto-bot
+    runtime: node
+    buildCommand: npm install && cd frontend && npm install && npm run build
+    startCommand: node backend/server.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CAPITAL
+        value: 100
+      - key: ENABLE_SHORTS
+        value: false
+      - key: KRAKEN_API_KEY
+        sync: false
+      - key: KRAKEN_API_SECRET
+        sync: false

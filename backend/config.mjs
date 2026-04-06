@@ -621,7 +621,7 @@ export const CORRELATION_RULES = {
 };
 
 // ── Server ─────────────────────────────────────────────────────
-export const SERVER_PORT    = 3001;
+export const SERVER_PORT    = Number(process.env.PORT) || 3001;
 export const WS_PORT        = 3001;  // Same server, upgraded connection
 export const FRONTEND_PORT  = 5173;
 

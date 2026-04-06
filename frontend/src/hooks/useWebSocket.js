@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const WS_URL = `ws://localhost:3001`;
+// In production (Render) connect to same host via wss://, locally use ws://localhost:3001
+const WS_URL = import.meta.env.VITE_WS_URL ||
+  (location.hostname === 'localhost'
+    ? 'ws://localhost:3001'
+    : `wss://${location.hostname}`);
 const RECONNECT_DELAY = 3000;
 
 /**

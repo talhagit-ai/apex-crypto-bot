@@ -7,6 +7,8 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import {
   ASSETS, CAPITAL, SERVER_PORT,
   CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS,
@@ -45,6 +47,11 @@ const http = createServer(app);
 const wss  = new WebSocketServer({ server: http });
 
 app.use(express.json());
+
+// Serve built frontend in production
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const frontendDist = join(__dirname, '../frontend/dist');
+app.use(express.static(frontendDist));
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -266,6 +273,9 @@ async function start() {
 
   // 3. Start weekly optimizer schedule
   startOptimizationSchedule();
+
+  // Fallback: serve frontend for any non-API route
+  app.get('*', (_req, res) => res.sendFile(join(frontendDist, 'index.html')));
 
   // 4. Start HTTP server
   http.listen(SERVER_PORT, () => {
