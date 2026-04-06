@@ -28,7 +28,7 @@ export const MAX_POS    = 5;          // Max concurrent positions — verhoog me
 export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
 
 // ── Signal Requirements ────────────────────────────────────────
-export const MIN_CONF   = 4;          // Min 4 of 6 factors confirmed
+export const MIN_CONF   = 3;          // Min 3 of 6 factors confirmed
 export const MIN_RR     = 1.8;        // Min risk/reward ratio
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────

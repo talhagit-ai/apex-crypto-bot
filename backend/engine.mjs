@@ -25,6 +25,7 @@ export class TradingEngine {
     this.trades = [];            // Trade history
     this.riskState = createRiskState(capital);
     this.tickCount = 0;
+    this.regimes = {};
     this.opts = opts;            // { simMode: true } disables time-based features
     this.simTime = Date.now();   // Simulated clock (advanced 5min per tick in simMode)
 
@@ -218,6 +219,8 @@ export class TradingEngine {
           else log.info(`Skip ${asset.id} SHORT: signal rejected`);
         }
 
+        this.regimes[asset.id] = bullRegime ? 'bull' : bearRegime ? 'bear' : 'neutral';
+
         if (!bullRegime && !bearRegime) {
           log.info(`Skip ${asset.id}: geen trend (noch bull noch bear)`);
         }
@@ -391,6 +394,7 @@ export class TradingEngine {
         killed: this.riskState.killed,
       },
       tickCount: this.tickCount,
+      regimes: { ...this.regimes },
     };
   }
 }

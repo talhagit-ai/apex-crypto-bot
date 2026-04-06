@@ -35,9 +35,9 @@ const ASSET_NAMES = {
 /**
  * AssetCard — shows live price, open position, signal indicators
  */
-export function AssetCard({ assetId, color, position, recentTrades, currentPrice }) {
+export function AssetCard({ assetId, color, position, recentTrades, currentPrice, regime }) {
   const name    = ASSET_NAMES[assetId] || assetId.replace('USDT', '');
-  const ticker  = assetId.replace('USDT', '/USDT');
+  const ticker  = (ASSET_NAMES[assetId] ? assetId.replace(/USD(T?)$/, '') : assetId) + '/EUR';
   const hasPos  = !!position;
   const isShort = hasPos && position.side === 'short';
 
@@ -138,7 +138,14 @@ export function AssetCard({ assetId, color, position, recentTrades, currentPrice
         </div>
       ) : (
         <div style={styles.idle}>
-          <span style={{ color: '#334155', fontSize: 11 }}>Waiting for signal...</span>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: 1, padding: '2px 8px',
+            borderRadius: 3, textTransform: 'uppercase',
+            background: regime === 'bull' ? '#14532d' : regime === 'bear' ? '#450a0a' : '#1e293b',
+            color: regime === 'bull' ? '#4ade80' : regime === 'bear' ? '#f87171' : '#475569',
+          }}>
+            {regime === 'bull' ? '▲ Bullish' : regime === 'bear' ? '▼ Bearish' : '— Neutral'}
+          </span>
         </div>
       )}
     </div>

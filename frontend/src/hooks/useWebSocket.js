@@ -17,6 +17,7 @@ const RECONNECT_DELAY = 3000;
  */
 export function useWebSocket() {
   const [state, setState]     = useState(null);
+  const [prices, setPrices]   = useState({});
   const [status, setStatus]   = useState('connecting');
   const [lastPing, setLastPing] = useState(null);
   const wsRef     = useRef(null);
@@ -44,6 +45,10 @@ export function useWebSocket() {
           setState(msg.data);
           setLastPing(Date.now());
         }
+        if (msg.type === 'prices') {
+          setPrices(msg.data);
+          setLastPing(Date.now());
+        }
       } catch (_) {}
     };
 
@@ -68,5 +73,5 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return { state, status, lastPing };
+  return { state, status, lastPing, prices };
 }

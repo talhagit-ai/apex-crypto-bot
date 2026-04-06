@@ -8,7 +8,7 @@ import { OptimizerCard } from './components/OptimizerCard.jsx';
 const CAPITAL = 100;
 
 export default function Dashboard() {
-  const { state, status, lastPing } = useWebSocket();
+  const { state, status, lastPing, prices } = useWebSocket();
 
   const positions  = state?.positions  || {};
   const trades     = state?.trades     || [];
@@ -22,6 +22,9 @@ export default function Dashboard() {
   for (const t of trades) {
     priceMap[t.id] = t.price;
   }
+
+  // Merge WebSocket live prices with state prices (state prices take precedence)
+  const livePrices = { ...prices, ...(state?.prices || {}) };
 
   return (
     <div style={styles.root}>
@@ -37,7 +40,8 @@ export default function Dashboard() {
               color={a.color}
               position={positions[a.id] || null}
               recentTrades={trades}
-              currentPrice={priceMap[a.id] || null}
+              currentPrice={livePrices[a.id] || null}
+              regime={state?.regimes?.[a.id] || 'neutral'}
             />
           ))}
         </section>

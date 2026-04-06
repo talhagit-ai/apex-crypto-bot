@@ -274,6 +274,14 @@ async function start() {
   // 3. Start weekly optimizer schedule
   startOptimizationSchedule();
 
+  // Broadcast live prices every 30 seconds
+  setInterval(() => {
+    const prices = buffer.currentPrices();
+    if (Object.keys(prices).length > 0) {
+      broadcast('prices', prices);
+    }
+  }, 30_000);
+
   // Fallback: serve frontend for any non-API route
   app.get('*', (_req, res) => res.sendFile(join(frontendDist, 'index.html')));
 
