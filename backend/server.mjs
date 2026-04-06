@@ -39,6 +39,7 @@ const orders  = new OrderManager(kraken);
 let wsClients = new Set();
 let tickCount  = 0;
 let lastTick5  = {};  // assetId → timestamp of last 5m bar
+let tickTimer  = null; // fires engine tick when not all assets close in time
 
 // ── Express ───────────────────────────────────────────────────
 
@@ -142,15 +143,28 @@ function onBarClose(assetId, interval, candle) {
 
   lastTick5[assetId] = candle.timestamp;
 
-  // Only run engine tick when all assets have a fresh bar (within 30s of each other)
   const timestamps = Object.values(lastTick5);
-  if (timestamps.length < ASSETS.length) return;
 
+  // If all assets reported, run immediately if within 90s window
   const minTs = Math.min(...timestamps);
   const maxTs = Math.max(...timestamps);
-  if (maxTs - minTs > 30_000) return; // stale — wait for all to align
+  if (timestamps.length >= ASSETS.length && maxTs - minTs <= 90_000) {
+    clearTimeout(tickTimer);
+    tickTimer = null;
+    lastTick5 = {};
+    runEngineTick();
+    return;
+  }
 
-  runEngineTick();
+  // Otherwise schedule a tick 90s after the first bar close this round
+  // (handles illiquid assets that never close)
+  if (!tickTimer) {
+    tickTimer = setTimeout(() => {
+      tickTimer = null;
+      lastTick5 = {};
+      runEngineTick();
+    }, 90_000);
+  }
 }
 
 async function runEngineTick() {
