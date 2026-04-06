@@ -92,8 +92,8 @@ export const ASSETS = [
   {
     id: 'BTCUSDT',
     symbol: 'BTCUSDT',          // Sim symbol
-    krakenSymbol: 'BTC/EUR',    // Kraken WebSocket symbol
-    krakenPair:   'XBTEUR',     // Kraken REST pair
+    krakenSymbol: 'BTC/USD',    // Kraken WebSocket symbol
+    krakenPair:   'XBTUSD',     // Kraken REST pair
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
@@ -109,8 +109,8 @@ export const ASSETS = [
   {
     id: 'ETHUSDT',
     symbol: 'ETHUSDT',
-    krakenSymbol: 'ETH/EUR',
-    krakenPair:   'ETHEUR',
+    krakenSymbol: 'ETH/USD',
+    krakenPair:   'ETHUSD',
     category: MODE,
     vol: 0.010,
     drift: 0.00040,
@@ -126,8 +126,8 @@ export const ASSETS = [
   {
     id: 'SOLUSDT',
     symbol: 'SOLUSDT',
-    krakenSymbol: 'SOL/EUR',
-    krakenPair:   'SOLEUR',
+    krakenSymbol: 'SOL/USD',
+    krakenPair:   'SOLUSD',
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
@@ -143,8 +143,8 @@ export const ASSETS = [
   {
     id: 'XRPUSDT',
     symbol: 'XRPUSDT',
-    krakenSymbol: 'XRP/EUR',
-    krakenPair:   'XRPEUR',
+    krakenSymbol: 'XRP/USD',
+    krakenPair:   'XRPUSD',
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
@@ -160,8 +160,8 @@ export const ASSETS = [
   {
     id: 'ADAUSDT',
     symbol: 'ADAUSDT',
-    krakenSymbol: 'ADA/EUR',
-    krakenPair:   'ADAEUR',
+    krakenSymbol: 'ADA/USD',
+    krakenPair:   'ADAUSD',
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
@@ -177,8 +177,8 @@ export const ASSETS = [
   {
     id: 'DOTUSD',
     symbol: 'DOTUSD',
-    krakenSymbol: 'DOT/EUR',
-    krakenPair:   'DOTEUR',
+    krakenSymbol: 'DOT/USD',
+    krakenPair:   'DOTUSD',
     category: MODE,
     vol: 0.018,
     drift: 0.00038,
@@ -194,8 +194,8 @@ export const ASSETS = [
   {
     id: 'LINKUSD',
     symbol: 'LINKUSD',
-    krakenSymbol: 'LINK/EUR',
-    krakenPair:   'LINKEUR',
+    krakenSymbol: 'LINK/USD',
+    krakenPair:   'LINKUSD',
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
@@ -211,8 +211,8 @@ export const ASSETS = [
   {
     id: 'AVAXUSD',
     symbol: 'AVAXUSD',
-    krakenSymbol: 'AVAX/EUR',
-    krakenPair:   'AVAXEUR',
+    krakenSymbol: 'AVAX/USD',
+    krakenPair:   'AVAXUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
@@ -228,8 +228,8 @@ export const ASSETS = [
   {
     id: 'ATOMUSD',
     symbol: 'ATOMUSD',
-    krakenSymbol: 'ATOM/EUR',
-    krakenPair:   'ATOMEUR',
+    krakenSymbol: 'ATOM/USD',
+    krakenPair:   'ATOMUSD',
     category: MODE,
     vol: 0.016,
     drift: 0.00038,
@@ -245,8 +245,8 @@ export const ASSETS = [
   {
     id: 'UNIUSD',
     symbol: 'UNIUSD',
-    krakenSymbol: 'UNI/EUR',
-    krakenPair:   'UNIEUR',
+    krakenSymbol: 'UNI/USD',
+    krakenPair:   'UNIUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
@@ -262,8 +262,8 @@ export const ASSETS = [
   {
     id: 'LTCUSD',
     symbol: 'LTCUSD',
-    krakenSymbol: 'LTC/EUR',
-    krakenPair:   'LTCEUR',
+    krakenSymbol: 'LTC/USD',
+    krakenPair:   'LTCUSD',
     category: MODE,
     vol: 0.012,
     drift: 0.00030,
@@ -279,8 +279,8 @@ export const ASSETS = [
   {
     id: 'POLUSD',
     symbol: 'POLUSD',
-    krakenSymbol: 'POL/EUR',
-    krakenPair:   'POLEUR',
+    krakenSymbol: 'POL/USD',
+    krakenPair:   'POLUSD',
     category: MODE,
     vol: 0.020,
     drift: 0.00040,
@@ -296,8 +296,8 @@ export const ASSETS = [
   {
     id: 'DOGEUSD',
     symbol: 'DOGEUSD',
-    krakenSymbol: 'DOGE/EUR',
-    krakenPair:   'XDGEUR',
+    krakenSymbol: 'DOGE/USD',
+    krakenPair:   'XDGUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00035,
@@ -313,8 +313,8 @@ export const ASSETS = [
   {
     id: 'ALGOUSD',
     symbol: 'ALGOUSD',
-    krakenSymbol: 'ALGO/EUR',
-    krakenPair:   'ALGOEUR',
+    krakenSymbol: 'ALGO/USD',
+    krakenPair:   'ALGOUSD',
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
@@ -330,8 +330,8 @@ export const ASSETS = [
   {
     id: 'NEARUSD',
     symbol: 'NEARUSD',
-    krakenSymbol: 'NEAR/EUR',
-    krakenPair:   'NEAREUR',
+    krakenSymbol: 'NEAR/USD',
+    krakenPair:   'NEARUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00042,
@@ -347,8 +347,8 @@ export const ASSETS = [
   {
     id: 'FILUSD',
     symbol: 'FILUSD',
-    krakenSymbol: 'FIL/EUR',
-    krakenPair:   'FILEUR',
+    krakenSymbol: 'FIL/USD',
+    krakenPair:   'FILUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
@@ -364,8 +364,8 @@ export const ASSETS = [
   {
     id: 'AAVEUSD',
     symbol: 'AAVEUSD',
-    krakenSymbol: 'AAVE/EUR',
-    krakenPair:   'AAVEEUR',
+    krakenSymbol: 'AAVE/USD',
+    krakenPair:   'AAVEUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00042,
@@ -381,8 +381,8 @@ export const ASSETS = [
   {
     id: 'GRTUSD',
     symbol: 'GRTUSD',
-    krakenSymbol: 'GRT/EUR',
-    krakenPair:   'GRTEUR',
+    krakenSymbol: 'GRT/USD',
+    krakenPair:   'GRTUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00040,
@@ -398,8 +398,8 @@ export const ASSETS = [
   {
     id: 'SNXUSD',
     symbol: 'SNXUSD',
-    krakenSymbol: 'SNX/EUR',
-    krakenPair:   'SNXEUR',
+    krakenSymbol: 'SNX/USD',
+    krakenPair:   'SNXUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
@@ -415,8 +415,8 @@ export const ASSETS = [
   {
     id: 'CRVUSD',
     symbol: 'CRVUSD',
-    krakenSymbol: 'CRV/EUR',
-    krakenPair:   'CRVEUR',
+    krakenSymbol: 'CRV/USD',
+    krakenPair:   'CRVUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00040,
@@ -432,8 +432,8 @@ export const ASSETS = [
   {
     id: 'COMPUSD',
     symbol: 'COMPUSD',
-    krakenSymbol: 'COMP/EUR',
-    krakenPair:   'COMPEUR',
+    krakenSymbol: 'COMP/USD',
+    krakenPair:   'COMPUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
@@ -449,8 +449,8 @@ export const ASSETS = [
   {
     id: 'ENJUSD',
     symbol: 'ENJUSD',
-    krakenSymbol: 'ENJ/EUR',
-    krakenPair:   'ENJEUR',
+    krakenSymbol: 'ENJ/USD',
+    krakenPair:   'ENJUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00040,
@@ -466,8 +466,8 @@ export const ASSETS = [
   {
     id: 'FLOWUSD',
     symbol: 'FLOWUSD',
-    krakenSymbol: 'FLOW/EUR',
-    krakenPair:   'FLOWEUR',
+    krakenSymbol: 'FLOW/USD',
+    krakenPair:   'FLOWUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
@@ -483,8 +483,8 @@ export const ASSETS = [
   {
     id: 'KSMUSD',
     symbol: 'KSMUSD',
-    krakenSymbol: 'KSM/EUR',
-    krakenPair:   'KSMEUR',
+    krakenSymbol: 'KSM/USD',
+    krakenPair:   'KSMUSD',
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
@@ -500,8 +500,8 @@ export const ASSETS = [
   {
     id: 'SANDUSD',
     symbol: 'SANDUSD',
-    krakenSymbol: 'SAND/EUR',
-    krakenPair:   'SANDEUR',
+    krakenSymbol: 'SAND/USD',
+    krakenPair:   'SANDUSD',
     category: MODE,
     vol: 0.028,
     drift: 0.00040,
@@ -517,8 +517,8 @@ export const ASSETS = [
   {
     id: 'MANAUSD',
     symbol: 'MANAUSD',
-    krakenSymbol: 'MANA/EUR',
-    krakenPair:   'MANAEUR',
+    krakenSymbol: 'MANA/USD',
+    krakenPair:   'MANAUSD',
     category: MODE,
     vol: 0.028,
     drift: 0.00040,
@@ -534,8 +534,8 @@ export const ASSETS = [
   {
     id: 'AXSUSD',
     symbol: 'AXSUSD',
-    krakenSymbol: 'AXS/EUR',
-    krakenPair:   'AXSEUR',
+    krakenSymbol: 'AXS/USD',
+    krakenPair:   'AXSUSD',
     category: MODE,
     vol: 0.028,
     drift: 0.00042,
@@ -551,8 +551,8 @@ export const ASSETS = [
   {
     id: '1INCHUSD',
     symbol: '1INCHUSD',
-    krakenSymbol: '1INCH/EUR',
-    krakenPair:   '1INCHEUR',
+    krakenSymbol: '1INCH/USD',
+    krakenPair:   '1INCHUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00040,
@@ -568,8 +568,8 @@ export const ASSETS = [
   {
     id: 'OCEANUSD',
     symbol: 'OCEANUSD',
-    krakenSymbol: 'OCEAN/EUR',
-    krakenPair:   'OCEANEUR',
+    krakenSymbol: 'OCEAN/USD',
+    krakenPair:   'OCEANUSD',
     category: MODE,
     vol: 0.025,
     drift: 0.00040,

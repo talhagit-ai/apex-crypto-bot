@@ -25,9 +25,9 @@ async function send(text, chatId = CHAT_ID) {
 export function notifyBuy(assetId, qty, price, sl, tp, conf) {
   send(
     `🟢 <b>BUY ${assetId}</b>\n` +
-    `Prijs: €${price.toFixed(4)}\n` +
+    `Prijs: $${price.toFixed(4)}\n` +
     `Qty: ${qty}\n` +
-    `SL: €${sl.toFixed(4)} | TP: €${tp.toFixed(4)}\n` +
+    `SL: $${sl.toFixed(4)} | TP: $${tp.toFixed(4)}\n` +
     `Signaal: ${conf}/6 factoren`
   );
 }
@@ -35,19 +35,19 @@ export function notifyBuy(assetId, qty, price, sl, tp, conf) {
 export function notifyShort(assetId, qty, price, sl, tp, conf) {
   send(
     `🔴 <b>SHORT ${assetId}</b>\n` +
-    `Prijs: €${price.toFixed(4)}\n` +
+    `Prijs: $${price.toFixed(4)}\n` +
     `Qty: ${qty}\n` +
-    `SL: €${sl.toFixed(4)} | TP: €${tp.toFixed(4)}\n` +
+    `SL: $${sl.toFixed(4)} | TP: $${tp.toFixed(4)}\n` +
     `Signaal: ${conf}/6 factoren`
   );
 }
 
 export function notifySell(assetId, qty, price, pnl, reason) {
   const emoji  = pnl >= 0 ? '💰' : '🛑';
-  const pnlStr = pnl >= 0 ? `+€${pnl.toFixed(2)}` : `-€${Math.abs(pnl).toFixed(2)}`;
+  const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
   send(
     `${emoji} <b>SELL ${assetId}</b> — ${reason}\n` +
-    `Prijs: €${price.toFixed(4)}\n` +
+    `Prijs: $${price.toFixed(4)}\n` +
     `PnL: <b>${pnlStr}</b>`
   );
 }
@@ -55,15 +55,15 @@ export function notifySell(assetId, qty, price, pnl, reason) {
 export function notifyPartial(assetId, partialNum, price, pnl) {
   send(
     `💵 <b>PARTIAL P${partialNum} ${assetId}</b>\n` +
-    `Prijs: €${price.toFixed(4)}\n` +
-    `Winst: +€${pnl.toFixed(2)}`
+    `Prijs: $${price.toFixed(4)}\n` +
+    `Winst: +$${pnl.toFixed(2)}`
   );
 }
 
 export function notifyStartup(capital, assetCount) {
   send(
     `🚀 <b>APEX Bot gestart</b>\n` +
-    `Kapitaal: €${capital}\n` +
+    `Kapitaal: $${capital}\n` +
     `Coins gescand: ${assetCount}\n` +
     `Status: Live op Kraken\n\n` +
     `💬 Je kunt nu met mij praten! Stel gewoon een vraag.`
@@ -102,7 +102,7 @@ function buildSystemPrompt(state) {
     posStr = Object.entries(positions).map(([id, p]) => {
       const pnl = p.unrealizedPnl ?? 0;
       const sign = pnl >= 0 ? '+' : '';
-      return `  • ${id} (${p.side}): ${p.qty} @ €${(p.entry || 0).toFixed(2)}, PnL: ${sign}€${pnl.toFixed(2)}`;
+      return `  • ${id} (${p.side}): ${p.qty} @ $${(p.entry || 0).toFixed(2)}, PnL: ${sign}$${pnl.toFixed(2)}`;
     }).join('\n');
   }
 
@@ -112,14 +112,14 @@ function buildSystemPrompt(state) {
     .join(', ') || 'geen data';
 
   const recentTrades = (state?.trades || []).slice(-5).reverse().map(t =>
-    `  • ${t.side} ${t.id} @ €${(t.price || 0).toFixed(2)} (${t.reason || ''})`
+    `  • ${t.side} ${t.id} @ $${(t.price || 0).toFixed(2)} (${t.reason || ''})`
   ).join('\n') || '  Nog geen trades';
 
   return `Je bent APEX, een AI crypto trading bot die live handelt op Kraken. Je wordt aangestuurd door een 6-factor signaal systeem (EMA stack, VWAP, RSI, MACD, Volume, RSI-acceleratie) met multi-timeframe regime filtering.
 
 LIVE STATUS — ${now}
 ━━━━━━━━━━━━━━━━━━━━━━
-Portfolio: €${equity.toFixed(2)} (cash: €${cash.toFixed(2)})
+Portfolio: $${equity.toFixed(2)} (cash: $${cash.toFixed(2)})
 Open posities (${posCount}):
 ${posStr}
 

@@ -60,7 +60,7 @@ export function EquityCurve({ trades = [], startCapital = 2000 }) {
       <div style={styles.titleRow}>
         <span style={styles.title}>Equity Curve</span>
         <span style={{ fontSize: 11, color: '#475569' }}>
-          Min: €{min.toFixed(0)} — Max: €{max.toFixed(0)}
+          Min: ${min.toFixed(0)} — Max: ${max.toFixed(0)}
         </span>
       </div>
 

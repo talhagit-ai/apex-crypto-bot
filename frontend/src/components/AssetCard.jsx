@@ -38,7 +38,7 @@ const ASSET_NAMES = {
  */
 export function AssetCard({ assetId, color, position, recentTrades, currentPrice, regime }) {
   const name    = ASSET_NAMES[assetId] || assetId.replace('USDT', '');
-  const ticker  = (ASSET_NAMES[assetId] ? assetId.replace(/USD(T?)$/, '') : assetId) + '/EUR';
+  const ticker  = (ASSET_NAMES[assetId] ? assetId.replace(/USD(T?)$/, '') : assetId) + '/USD';
   const hasPos  = !!position;
   const isShort = hasPos && position.side === 'short';
 
@@ -98,7 +98,7 @@ export function AssetCard({ assetId, color, position, recentTrades, currentPrice
       {/* Price + Spark */}
       <div style={styles.priceRow}>
         <span style={styles.price}>
-          {currentPrice ? `€${_fmt(currentPrice)}` : '—'}
+          {currentPrice ? `$${_fmt(currentPrice)}` : '—'}
         </span>
         <Spark data={priceSeries} color={color} width={72} height={24} />
       </div>
@@ -108,17 +108,17 @@ export function AssetCard({ assetId, color, position, recentTrades, currentPrice
         <div style={styles.posDetails}>
           <div style={styles.posRow}>
             <span style={styles.label}>Entry</span>
-            <span style={styles.val}>€{_fmt(position.entry)}</span>
+            <span style={styles.val}>${_fmt(position.entry)}</span>
             <span style={{ ...styles.pnl, color: pnlPos ? '#22d3ee' : '#f87171' }}>
-              {pnlPos ? '+' : ''}€{pnl.toFixed(2)} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+              {pnlPos ? '+' : ''}${pnl.toFixed(2)} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
             </span>
           </div>
 
           <div style={styles.posRow}>
             <span style={styles.label}>SL</span>
-            <span style={{ ...styles.val, color: '#f87171' }}>€{_fmt(position.sl)}</span>
+            <span style={{ ...styles.val, color: '#f87171' }}>${_fmt(position.sl)}</span>
             <span style={styles.label}>TP</span>
-            <span style={{ ...styles.val, color: '#22c55e' }}>€{_fmt(position.tp)}</span>
+            <span style={{ ...styles.val, color: '#22c55e' }}>${_fmt(position.tp)}</span>
           </div>
 
           {/* Progress bar: entry → TP */}

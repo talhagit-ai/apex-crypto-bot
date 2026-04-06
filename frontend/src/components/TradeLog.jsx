@@ -43,7 +43,7 @@ function TradeRow({ trade }) {
       <span style={styles.price}>${_fmt(trade.price)}</span>
       {trade.pnl != null ? (
         <span style={{ ...styles.pnl, color: trade.pnl >= 0 ? '#22c55e' : '#f87171' }}>
-          {trade.pnl >= 0 ? '+' : ''}€{trade.pnl.toFixed(2)}
+          {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
         </span>
       ) : (
         <span style={styles.reason}>{trade.reason?.slice(0, 18) || ''}</span>

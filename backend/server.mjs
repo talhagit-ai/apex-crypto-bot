@@ -48,20 +48,10 @@ let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
 async function refreshBalances() {
   try {
     const raw = await kraken.api.balance();
-    const eur  = parseFloat(raw?.ZEUR || raw?.EUR  || 0);
     const usd  = parseFloat(raw?.ZUSD || raw?.USD  || 0);
-    // Use whichever currency has funds
-    if (eur > 0) {
-      realBalances.spotEUR      = eur;
-      realBalances.spotCurrency = 'EUR';
-    } else if (usd > 0) {
-      realBalances.spotEUR      = usd;   // stored as spotEUR but actually USD
-      realBalances.spotCurrency = 'USD';
-    } else {
-      realBalances.spotEUR      = 0;
-      realBalances.spotCurrency = 'EUR';
-    }
-    log.info(`Spot balance: ${realBalances.spotCurrency} ${realBalances.spotEUR.toFixed(2)}`);
+    realBalances.spotUSD      = usd;
+    realBalances.spotCurrency = 'USD';
+    log.info(`Spot balance: $${realBalances.spotUSD.toFixed(2)} USD`);
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });
   }
@@ -366,11 +356,11 @@ async function start() {
 
   // 1. Fetch real Kraken balances
   await refreshBalances();
-  if (realBalances.spotEUR !== null) {
-    log.info(`Real Kraken spot balance: €${realBalances.spotEUR.toFixed(2)} EUR`);
+  if (realBalances.spotUSD > 0) {
+    log.info(`Real Kraken spot balance: $${realBalances.spotUSD.toFixed(2)} USD`);
     // Sync engine starting capital with real spot balance
-    engine.capital = realBalances.spotEUR;
-    engine.cash    = realBalances.spotEUR;
+    engine.capital = realBalances.spotUSD;
+    engine.cash    = realBalances.spotUSD;
   }
   if (realBalances.futuresUSD !== null) {
     log.info(`Real Kraken futures balance: $${realBalances.futuresUSD.toFixed(2)} USD`);

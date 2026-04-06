@@ -46,8 +46,8 @@ export function OptimizerCard() {
         <div style={s.latestRow}>
           <StatusBadge status={latest.status} />
           <span style={s.metaText}>
-            {latest.baseline_avg !== null && `Base: €${latest.baseline_avg}/w`}
-            {latest.new_avg !== null && ` → €${latest.new_avg}/w`}
+            {latest.baseline_avg !== null && `Base: ${latest.baseline_avg}/w`}
+            {latest.new_avg !== null && ` → ${latest.new_avg}/w`}
             {latest.improvement_pct !== null && (
               <span style={{ color: '#22c55e', marginLeft: 6 }}>
                 +{latest.improvement_pct}%
@@ -90,7 +90,7 @@ export function OptimizerCard() {
           <StatusBadge status={lastResult.status} />
           {lastResult.status === 'improved' && (
             <span style={{ color: '#22c55e', marginLeft: 6, fontSize: 11 }}>
-              +€{(lastResult.new?.avgPnl - lastResult.baseline?.avgPnl).toFixed(2)}/week
+              +${(lastResult.new?.avgPnl - lastResult.baseline?.avgPnl).toFixed(2)}/week
             </span>
           )}
           {lastResult.status === 'no_change' && (
