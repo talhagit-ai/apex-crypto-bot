@@ -9,15 +9,17 @@ const STATUS_LABEL = { connected: 'LIVE', connecting: 'CONNECTING...', disconnec
 export function StatusHeader({ state, status, lastPing }) {
   const color  = STATUS_COLOR[status] || '#94a3b8';
   const label  = STATUS_LABEL[status] || status.toUpperCase();
-  const isLive = status === 'connected';
 
   const equity   = state?.equity   ?? 0;
   const pnl      = state?.pnl      ?? 0;
   const pnlPct   = state?.returnPct ?? 0;
-  const daily    = state?.risk?.dailyLoss   ?? 0;   // % already
+  const daily    = state?.risk?.dailyLoss   ?? 0;
   const weekly   = state?.risk?.weeklyLoss  ?? 0;
   const killed   = state?.risk?.killed      ?? false;
   const reduced  = (state?.risk?.riskReduction ?? 1) < 1;
+
+  const spotEUR    = state?.realBalances?.spotEUR    ?? null;
+  const futuresUSD = state?.realBalances?.futuresUSD ?? null;
 
   const pnlColor = pnl >= 0 ? '#22d3ee' : '#f87171';
   const lastStr  = lastPing ? new Date(lastPing).toLocaleTimeString('nl-NL') : '—';
@@ -33,11 +35,25 @@ export function StatusHeader({ state, status, lastPing }) {
         {reduced && !killed && <span style={{ ...styles.badge, color: '#f59e0b', border: '1px solid #f59e0b' }}>RISK REDUCED</span>}
       </div>
 
-      {/* Centre: equity + P&L */}
+      {/* Centre: real Kraken balances + engine P&L */}
       <div style={styles.centre}>
-        <span style={styles.equity}>€{equity.toFixed(2)}</span>
-        <span style={{ color: pnlColor, fontSize: 13, marginLeft: 10 }}>
-          {pnl >= 0 ? '+' : ''}€{pnl.toFixed(2)} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+        <div style={styles.balances}>
+          <div style={styles.balanceItem}>
+            <span style={styles.balanceLabel}>Spot</span>
+            <span style={styles.balanceValue}>
+              {spotEUR !== null ? `€${spotEUR.toFixed(2)}` : '—'}
+            </span>
+          </div>
+          <div style={{ color: '#334155', fontSize: 16, margin: '0 6px' }}>|</div>
+          <div style={styles.balanceItem}>
+            <span style={styles.balanceLabel}>Futures</span>
+            <span style={styles.balanceValue}>
+              {futuresUSD !== null ? `$${futuresUSD.toFixed(2)}` : '—'}
+            </span>
+          </div>
+        </div>
+        <span style={{ color: pnlColor, fontSize: 12, marginLeft: 14 }}>
+          Bot P&L: {pnl >= 0 ? '+' : ''}€{pnl.toFixed(2)} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
         </span>
       </div>
 
@@ -72,8 +88,11 @@ const styles = {
     fontSize: 10, fontWeight: 700, letterSpacing: 1, padding: '2px 6px',
     borderRadius: 4, background: 'transparent',
   },
-  centre: { display: 'flex', alignItems: 'baseline', gap: 4 },
-  equity: { color: '#f1f5f9', fontSize: 20, fontWeight: 700, fontVariantNumeric: 'tabular-nums' },
+  centre: { display: 'flex', alignItems: 'center', gap: 4 },
+  balances: { display: 'flex', alignItems: 'center', gap: 4 },
+  balanceItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 },
+  balanceLabel: { color: '#475569', fontSize: 9, letterSpacing: 1, textTransform: 'uppercase' },
+  balanceValue: { color: '#f1f5f9', fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums' },
   right: { display: 'flex', alignItems: 'center', gap: 14 },
   meter: { display: 'flex', alignItems: 'center', gap: 5, minWidth: 110 },
   meterLabel: { color: '#64748b', fontSize: 11, width: 28 },

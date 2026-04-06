@@ -42,6 +42,25 @@ let tickCount  = 0;
 let lastTick5  = {};  // assetId → timestamp of last 5m bar
 let tickTimer  = null; // fires engine tick when not all assets close in time
 
+// Real Kraken balances (refreshed every 60s)
+let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
+
+async function refreshBalances() {
+  try {
+    const spotEUR = await kraken.getBalance();
+    realBalances.spotEUR = spotEUR;
+  } catch (e) {
+    log.warn('Could not fetch spot balance', { err: e.message });
+  }
+  try {
+    const futuresUSD = await futures.getBalance();
+    realBalances.futuresUSD = futuresUSD;
+  } catch (e) {
+    // Futures keys may not be set — silently skip
+  }
+  realBalances.lastUpdated = Date.now();
+}
+
 // ── Express ───────────────────────────────────────────────────
 
 const app  = express();
@@ -90,10 +109,14 @@ app.get('/api/test', async (_req, res) => {
   res.json(results);
 });
 
+// Helper: merge real balances into engine state
+function getFullState(prices) {
+  return { ...engine.getState(prices), realBalances };
+}
+
 // REST: get current state
 app.get('/state', (_req, res) => {
-  const prices = buffer.currentPrices();
-  res.json(engine.getState(prices));
+  res.json(getFullState(buffer.currentPrices()));
 });
 
 // REST: get recent trades
@@ -132,8 +155,7 @@ wss.on('connection', (ws, req) => {
   log.info(`WS client connected (${wsClients.size} total)`);
 
   // Send current state immediately on connect
-  const prices = buffer.currentPrices();
-  ws.send(JSON.stringify({ type: 'state', data: engine.getState(prices) }));
+  ws.send(JSON.stringify({ type: 'state', data: getFullState(buffer.currentPrices()) }));
 
   ws.on('close', () => {
     wsClients.delete(ws);
@@ -213,9 +235,12 @@ async function runEngineTick() {
   // Detect changes and place real orders
   await _syncOrders(prevPositions, barData);
 
+  // Refresh real Kraken balances every tick
+  await refreshBalances();
+
   // Broadcast updated state
   const prices = buffer.currentPrices();
-  const state  = engine.getState(prices);
+  const state  = getFullState(prices);
   broadcast('state', state);
 
   // Save equity snapshot every 12 ticks (= 1 hour)
@@ -314,13 +339,28 @@ async function start() {
   log.info(`  Shorts: ${ENABLE_SHORTS ? 'ENABLED (Kraken Futures)' : 'DISABLED (spot only)'}`);
   log.info('═══════════════════════════════════════════════════════════');
 
-  // 1. Fetch historical data
+  // 1. Fetch real Kraken balances
+  await refreshBalances();
+  if (realBalances.spotEUR !== null) {
+    log.info(`Real Kraken spot balance: €${realBalances.spotEUR.toFixed(2)} EUR`);
+    // Sync engine starting capital with real spot balance
+    engine.capital = realBalances.spotEUR;
+    engine.cash    = realBalances.spotEUR;
+  }
+  if (realBalances.futuresUSD !== null) {
+    log.info(`Real Kraken futures balance: $${realBalances.futuresUSD.toFixed(2)} USD`);
+  }
+
+  // Refresh balances every 60 seconds
+  setInterval(refreshBalances, 60_000);
+
+  // 2. Fetch historical data
   await buffer.init();
 
-  // 2. Connect Kraken WebSocket streams
+  // 3. Connect Kraken WebSocket streams
   kraken.connectWebSocket(onBarClose);
 
-  // 3. Start weekly optimizer schedule
+  // 4. Start weekly optimizer schedule
   startOptimizationSchedule();
 
   // Broadcast live prices every 30 seconds
@@ -345,7 +385,7 @@ async function start() {
   notifyStartup(CAPITAL, ASSETS.length);
 
   // Start Telegram AI chat polling
-  startTelegramChat(() => engine.getState(buffer.currentPrices()));
+  startTelegramChat(() => getFullState(buffer.currentPrices()));
 }
 
 // ── Graceful Shutdown ─────────────────────────────────────────
