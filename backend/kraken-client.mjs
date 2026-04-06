@@ -70,18 +70,29 @@ export class KrakenClient extends EventEmitter {
   }
 
   /**
-   * Place a market order
+   * Resolve krakenPair from asset id or symbol
+   */
+  _krakenPair(symbol) {
+    const asset = ASSETS.find(a => a.id === symbol || a.symbol === symbol);
+    return asset?.krakenPair || symbol;
+  }
+
+  /**
+   * Place a market order on Kraken Spot
    * @returns {{ orderId, symbol, side, qty }}
    */
   async placeOrder({ symbol, side, qty }) {
+    const pair = this._krakenPair(symbol);
+    log.info(`Placing ${side} order`, { pair, qty });
     const resp = await this.api.addOrder({
-      pair:      symbol,
+      pair,
       type:      side === 'Buy' ? 'buy' : 'sell',
       ordertype: 'market',
       volume:    String(qty),
     });
 
     const orderId = resp?.txid?.[0] || 'unknown';
+    log.info(`Order placed`, { orderId, pair, side });
     return { orderId, symbol, side, qty };
   }
 
@@ -90,7 +101,6 @@ export class KrakenClient extends EventEmitter {
    */
   async getOrder(symbol, orderId) {
     const resp = await this.api.queryOrders({ txid: orderId });
-    // Direct object: { [orderId]: { status, price, ... } }
     const order = resp?.[orderId];
     if (!order) return null;
 
@@ -104,8 +114,8 @@ export class KrakenClient extends EventEmitter {
    * Get current ticker (bid/ask/last)
    */
   async getTicker(symbol) {
-    const resp = await this.api.ticker({ pair: symbol });
-    // Direct object: { XXBTZEUR: { a, b, c, ... } }
+    const pair = this._krakenPair(symbol);
+    const resp = await this.api.ticker({ pair });
     const pairKey = Object.keys(resp).find(k => k !== 'last') || Object.keys(resp)[0];
     const t = resp[pairKey];
     return {
