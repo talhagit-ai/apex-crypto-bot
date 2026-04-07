@@ -48,7 +48,7 @@ export class KrakenFuturesClient {
     if (!this.enabled) throw new Error('Futures API keys not configured');
 
     const nonce    = Date.now().toString();
-    const pathOnly = path; // e.g. '/accounts'
+    const pathOnly = `/api/v3${path}`; // signing uses /api/v3/accounts, not /accounts
     let   url      = `${BASE_URL}${path}`;
     let   body     = '';
 
