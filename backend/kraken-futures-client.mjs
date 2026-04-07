@@ -33,24 +33,22 @@ export class KrakenFuturesClient {
 
   // ── Authentication ─────────────────────────────────────────
 
-  _sign(endpoint, nonce, postData = '') {
-    // Kraken Futures signing:
-    // message = SHA256(postData + nonce + endpoint_without_prefix)
-    // signature = base64(HMAC-SHA512(message, base64decode(secret)))
-    const endpointPath = endpoint.replace('/derivatives/api/v3', '');
+  _sign(path, nonce, postData = '') {
+    // Kraken Futures signing (official docs):
+    // message  = SHA256(postData + nonce + path)
+    // authent  = Base64( HMAC-SHA512( message, Base64Decode(secret) ) )
     const message = crypto.createHash('sha256')
-      .update(postData + nonce + endpointPath)
+      .update(postData + nonce + path)
       .digest();
-    const secret  = Buffer.from(this.apiSecret, 'base64');
-    const sig     = crypto.createHmac('sha512', secret).update(message).digest('base64');
-    return sig;
+    const secret = Buffer.from(this.apiSecret, 'base64');
+    return crypto.createHmac('sha512', secret).update(message).digest('base64');
   }
 
   async _request(method, path, params = {}) {
     if (!this.enabled) throw new Error('Futures API keys not configured');
 
     const nonce    = Date.now().toString();
-    const endpoint = `/derivatives/api/v3${path}`;
+    const pathOnly = path; // e.g. '/accounts'
     let   url      = `${BASE_URL}${path}`;
     let   body     = '';
 
@@ -60,21 +58,27 @@ export class KrakenFuturesClient {
       body = new URLSearchParams(params).toString();
     }
 
-    const sig = this._sign(endpoint, nonce, method === 'POST' ? body : '');
+    const postData = method === 'POST' ? body : '';
+    const sig = this._sign(pathOnly, nonce, postData);
+
+    const headers = {
+      'APIKey':  this.apiKey,
+      'Nonce':   nonce,
+      'Authent': sig,
+    };
+    if (method === 'POST') {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
 
     const res = await fetch(url, {
       method,
-      headers: {
-        'APIKey':     this.apiKey,
-        'Nonce':      nonce,
-        'Authent':    sig,
-        'Content-Type': method === 'POST' ? 'application/x-www-form-urlencoded' : undefined,
-      },
+      headers,
       body: method === 'POST' ? body : undefined,
     });
 
     const data = await res.json();
     if (data.result !== 'success') {
+      log.warn('Futures API raw error', { status: res.status, data: JSON.stringify(data).slice(0, 300) });
       throw new Error(`Futures API error: ${JSON.stringify(data.error || data)}`);
     }
     return data;
