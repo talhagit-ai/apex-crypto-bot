@@ -28,8 +28,8 @@ export const MAX_POS    = 5;          // Max concurrent positions — verhoog me
 export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
 
 // ── Signal Requirements ────────────────────────────────────────
-export const MIN_CONF   = 3;          // Min 3 of 6 factors confirmed
-export const MIN_RR     = 1.8;        // Min risk/reward ratio
+export const MIN_CONF   = 4;          // Min 4 of 6 factors confirmed (hogere kwaliteit)
+export const MIN_RR     = 2.0;        // Min risk/reward ratio
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
 export const PARTIAL1_R   = 0.5;      // First partial at +0.5R
@@ -61,8 +61,8 @@ export const CONF_RISK = {
 };
 
 // ── Regime Filter ──────────────────────────────────────────────
-export const SLOPE_BARS = 3;          // EMA50 slope lookback
-export const ADX_MIN    = 8;          // Min ADX for trending market (crypto trends show lower ADX due to noise)
+export const SLOPE_BARS = 5;          // EMA50 slope lookback (meer bars = stabielere trend)
+export const ADX_MIN    = 15;         // Min ADX — hogere drempel = alleen echte trends
 
 // ── Timeframe ──────────────────────────────────────────────────
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
