@@ -209,7 +209,15 @@ app.get('/api/balances', async (_req, res) => {
     } catch (e) {
       futuresErr = e.message;
     }
-    res.json({ realBalances, rawKraken: raw, rawFutures, futuresErr });
+    res.json({
+      realBalances, rawKraken: raw, rawFutures, futuresErr,
+      futuresKeysLoaded: {
+        hasKey:    !!process.env.KRAKEN_FUTURES_API_KEY,
+        keyPrefix: (process.env.KRAKEN_FUTURES_API_KEY || '').slice(0, 6),
+        hasSecret: !!process.env.KRAKEN_FUTURES_API_SECRET,
+        secretLen: (process.env.KRAKEN_FUTURES_API_SECRET || '').length,
+      },
+    });
   } catch (e) {
     res.json({ realBalances, error: e.message });
   }
