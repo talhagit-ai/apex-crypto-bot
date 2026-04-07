@@ -190,6 +190,31 @@ app.get('/trades', (_req, res) => {
   res.json(engine.trades.slice(-200));
 });
 
+// POST /api/test-spot — place a tiny real spot buy to verify orders work
+app.post('/api/test-spot', async (_req, res) => {
+  try {
+    // Buy minimum DOGE (~$0.50 worth)
+    const ticker = await kraken.getTicker('DOGEUSD');
+    const price  = ticker.askPrice;
+    const qty    = Math.ceil(6 / price); // ~6 DOGE ≈ $0.50
+    const result = await kraken.placeOrder({ symbol: 'DOGEUSD', side: 'Buy', qty });
+    res.json({ ok: true, msg: `Test buy: ${qty} DOGE @ $${price}`, result });
+  } catch (e) {
+    res.json({ ok: false, err: e.message });
+  }
+});
+
+// POST /api/test-futures — place a tiny futures short to verify futures work
+app.post('/api/test-futures', async (_req, res) => {
+  try {
+    // Smallest possible BTC futures contract = 1 contract ($1 notional)
+    const result = await futures.openShort('BTCUSDT', 1);
+    res.json({ ok: true, msg: 'Test futures short: 1 BTC contract', result });
+  } catch (e) {
+    res.json({ ok: false, err: e.message });
+  }
+});
+
 // Telegram webhook endpoint
 app.post('/telegram-webhook', (req, res) => {
   res.sendStatus(200); // acknowledge immediately
