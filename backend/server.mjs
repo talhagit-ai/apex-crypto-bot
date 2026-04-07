@@ -121,7 +121,8 @@ async function refreshBalances() {
     realBalances.futuresUSD = futuresUSD;
     log.info(`Futures balance: $${futuresUSD.toFixed(2)}`);
   } catch (e) {
-    log.info('Futures balance unavailable', { err: e.message });
+    log.warn('Futures balance error', { err: e.message });
+    realBalances.futuresError = e.message;
   }
   realBalances.lastUpdated = Date.now();
 }
@@ -200,7 +201,15 @@ app.get('/api/balances', async (_req, res) => {
   await refreshBalances();
   try {
     const raw = await kraken.api.balance();
-    res.json({ realBalances, rawKraken: raw });
+    // Also try raw futures accounts
+    let rawFutures = null;
+    let futuresErr = null;
+    try {
+      rawFutures = await futures._request('GET', '/accounts');
+    } catch (e) {
+      futuresErr = e.message;
+    }
+    res.json({ realBalances, rawKraken: raw, rawFutures, futuresErr });
   } catch (e) {
     res.json({ realBalances, error: e.message });
   }
