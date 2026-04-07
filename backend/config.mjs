@@ -225,7 +225,75 @@ export const ASSETS = [
     corrGroup: 'ALT3',
     regimeATR: 0.09,
   },
-  // ── Only top 8 liquid assets — removed illiquid altcoins ────
+  {
+    id: 'DOGEUSD',
+    symbol: 'DOGEUSD',
+    krakenSymbol: 'DOGE/USD',
+    krakenPair:   'XDGUSD',
+    category: MODE,
+    vol: 0.018,
+    drift: 0.00035,
+    slM: 1.5,
+    tpM: 4.0,
+    minQty: 10,
+    qtyStep: 1,
+    pricePrecision: 5,
+    color: '#c3a634',
+    corrGroup: 'ALT4',
+    regimeATR: 0.09,
+  },
+  {
+    id: 'ATOMUSD',
+    symbol: 'ATOMUSD',
+    krakenSymbol: 'ATOM/USD',
+    krakenPair:   'ATOMUSD',
+    category: MODE,
+    vol: 0.018,
+    drift: 0.00040,
+    slM: 1.6,
+    tpM: 4.2,
+    minQty: 0.1,
+    qtyStep: 0.1,
+    pricePrecision: 3,
+    color: '#2e3148',
+    corrGroup: 'ALT5',
+    regimeATR: 0.09,
+  },
+  {
+    id: 'LTCUSD',
+    symbol: 'LTCUSD',
+    krakenSymbol: 'LTC/USD',
+    krakenPair:   'XLTCUSD',
+    category: MODE,
+    vol: 0.012,
+    drift: 0.00035,
+    slM: 1.5,
+    tpM: 4.0,
+    minQty: 0.01,
+    qtyStep: 0.01,
+    pricePrecision: 2,
+    color: '#bfbbbb',
+    corrGroup: 'ALT6',
+    regimeATR: 0.08,
+  },
+  {
+    id: 'NEARUSD',
+    symbol: 'NEARUSD',
+    krakenSymbol: 'NEAR/USD',
+    krakenPair:   'NEARUSD',
+    category: MODE,
+    vol: 0.020,
+    drift: 0.00042,
+    slM: 1.6,
+    tpM: 4.2,
+    minQty: 0.1,
+    qtyStep: 0.1,
+    pricePrecision: 3,
+    color: '#00ec97',
+    corrGroup: 'ALT7',
+    regimeATR: 0.09,
+  },
+  // ── Top 12 liquid assets ────────────────────────────────────
 ];
 
 // ── Correlation Groups ─────────────────────────────────────────
@@ -233,15 +301,19 @@ export const ASSETS = [
 // SOL = MED correlation with BTC (0.75)
 // XRP = LOW correlation with BTC (0.60)
 // ADA = SPEC correlation (~0.60)
-// DOT/LINK/AVAX/ATOM/UNI/LTC/MATIC = ALT groups (independent slots)
+// DOT/LINK/AVAX/DOGE/ATOM/LTC/NEAR = ALT groups (independent slots)
 export const CORRELATION_RULES = {
-  HIGH:  { maxSimultaneous: 1 },  // BTC or ETH (never both — 0.85 correlation)
+  HIGH:  { maxSimultaneous: 1 },  // BTC or ETH
   MED:   { maxSimultaneous: 1 },  // SOL
   LOW:   { maxSimultaneous: 1 },  // XRP
   SPEC:  { maxSimultaneous: 1 },  // ADA
   ALT1:  { maxSimultaneous: 1 },  // DOT
   ALT2:  { maxSimultaneous: 1 },  // LINK
   ALT3:  { maxSimultaneous: 1 },  // AVAX
+  ALT4:  { maxSimultaneous: 1 },  // DOGE
+  ALT5:  { maxSimultaneous: 1 },  // ATOM
+  ALT6:  { maxSimultaneous: 1 },  // LTC
+  ALT7:  { maxSimultaneous: 1 },  // NEAR
 };
 
 // ── Server ─────────────────────────────────────────────────────

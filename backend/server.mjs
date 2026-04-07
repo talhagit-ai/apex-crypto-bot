@@ -248,6 +248,42 @@ app.get('/api/balances', async (_req, res) => {
   }
 });
 
+// POST /api/liquidate-dust — sell non-tracked coin holdings (FLOW, SNX, DOGE etc)
+app.post('/api/liquidate-dust', async (_req, res) => {
+  const LIQUIDATE_MAP = {
+    'FLOW': { pair: 'FLOWUSD', minQty: 1 },
+    'SNX':  { pair: 'SNXUSD',  minQty: 0.01 },
+    'XXDG': { pair: 'XDGUSD',  minQty: 1 },
+    'DOGE': { pair: 'XDGUSD',  minQty: 1 },
+  };
+
+  const results = [];
+  try {
+    const raw = await kraken.api.balance();
+    for (const [krakenAsset, amtStr] of Object.entries(raw)) {
+      if (krakenAsset === 'ZUSD' || krakenAsset === 'ZEUR') continue;
+      const amt = parseFloat(amtStr);
+      if (amt < 0.001) continue;
+      const info = LIQUIDATE_MAP[krakenAsset];
+      if (!info) continue;
+      if (amt < info.minQty) { results.push({ asset: krakenAsset, qty: amt, ok: false, err: 'below minQty' }); continue; }
+      try {
+        const resp = await kraken.api.addOrder({ pair: info.pair, type: 'sell', ordertype: 'market', volume: String(amt) });
+        const orderId = resp?.txid?.[0] || 'unknown';
+        results.push({ asset: krakenAsset, qty: amt, pair: info.pair, orderId, ok: true });
+        log.info(`Liquidated dust: ${amt} ${krakenAsset} via ${info.pair}`, { orderId });
+      } catch (e) {
+        results.push({ asset: krakenAsset, qty: amt, ok: false, err: e.message });
+        log.warn(`Failed to liquidate ${krakenAsset}`, { err: e.message });
+      }
+    }
+    setTimeout(() => refreshBalances(), 4000);
+    res.json({ ok: true, results });
+  } catch (e) {
+    res.status(500).json({ ok: false, err: e.message });
+  }
+});
+
 // ── Optimizer Endpoints ──────────────────────────────────────
 
 // Manual trigger: POST /optimize
