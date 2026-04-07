@@ -34,25 +34,13 @@ export class OrderManager {
     const asset = ASSETS.find(a => a.id === assetId);
     if (!asset) return null;
 
-    // Check current market price vs signal price (slippage guard)
-    const ticker = await this._safeGetTicker(asset.symbol);
-    if (ticker) {
-      const slippage = Math.abs(ticker.askPrice - signalPrice) / signalPrice;
-      if (slippage > MAX_SLIPPAGE) {
-        log.warn(`SLIPPAGE REJECTED ${assetId}`, {
-          signalPrice,
-          askPrice: ticker.askPrice,
-          slippagePct: +(slippage * 100).toFixed(3),
-          maxPct: MAX_SLIPPAGE * 100,
-        });
-        return null;
-      }
-    }
+    // Use krakenPair for all REST calls (e.g. XBTUSD, not BTCUSDT)
+    const pair = asset.krakenPair || asset.symbol;
 
-    const result = await this._placeWithRetry(asset.symbol, 'Buy', qty, signalPrice);
+    const result = await this._placeWithRetry(pair, 'Buy', qty, signalPrice);
     if (!result) return null;
 
-    const fillPrice = await this._waitForFill(asset.symbol, result.orderId, signalPrice);
+    const fillPrice = await this._waitForFill(pair, result.orderId, signalPrice);
 
     log.trade(`ORDER FILLED BUY ${assetId}`, {
       orderId: result.orderId,
@@ -94,13 +82,14 @@ export class OrderManager {
     const asset = ASSETS.find(a => a.id === assetId);
     if (!asset) return null;
 
-    const ticker = await this._safeGetTicker(asset.symbol);
-    const signalPrice = ticker?.bidPrice || 0;
+    const pair = asset.krakenPair || asset.symbol;
+    const ticker = await this._safeGetTicker(pair);
+    const signalPrice = ticker?.bidPrice || entryPrice;
 
-    const result = await this._placeWithRetry(asset.symbol, 'Sell', qty, signalPrice);
+    const result = await this._placeWithRetry(pair, 'Sell', qty, signalPrice);
     if (!result) return null;
 
-    const fillPrice = await this._waitForFill(asset.symbol, result.orderId, signalPrice);
+    const fillPrice = await this._waitForFill(pair, result.orderId, signalPrice);
     const actualPrice = fillPrice || signalPrice;
 
     const pnl = (actualPrice - entryPrice) * qty;
