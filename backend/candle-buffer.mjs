@@ -120,8 +120,8 @@ export class CandleBuffer {
     try {
       const klines = await this.client.getKlines(asset.symbol, interval, limit);
 
-      // Bybit returns newest first — reverse to chronological
-      const sorted = klines.slice().reverse();
+      // Kraken returns oldest first — already chronological (no reverse needed)
+      const sorted = klines.slice();
 
       for (const k of sorted) {
         bars.timestamps.push(Number(k[0]));

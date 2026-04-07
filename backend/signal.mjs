@@ -51,7 +51,7 @@ export function checkBearishRegime(closes, highs, lows, regimeATR = 0.05) {
 /**
  * LONG signal — proven APEX edge (6-factor)
  */
-export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}) {
+export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}, regimeData = null) {
   if (closes.length < 72) return null;
 
   const n   = closes.length - 1;
@@ -72,13 +72,18 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const VWAP = vwap(highs, lows, closes, volumes, VWAP_WINDOW);
   const VR   = volumeRatio(volumes, 20);
 
+  // Use 1H ATR for SL/TP if available (more stable than 5m ATR)
+  const ATR_SL = (regimeData && regimeData.highs.length >= 14)
+    ? calcATR(regimeData.highs, regimeData.lows, regimeData.closes, 14)
+    : ATR;
+
   if (ADX < ADX_MIN) return null;
 
   const f1 = e8[n] > e13[n] && e13[n] > e21[n];  // EMA stack bull
   const f2 = cur > VWAP;                           // Above VWAP
   const f3 = RSI > 38 && RSI < 74;                 // RSI sweet spot
   const f4 = MH > MH1;                             // MACD rising
-  const f5 = VR >= 0.85;                            // Volume active (crypto 24/7, no big surges needed)
+  const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
   const f6 = RSI > RSI2 && RSI2 > RSI3;           // RSI accelerating up
 
   const conf    = [f1, f2, f3, f4, f5, f6].filter(Boolean).length;
@@ -86,8 +91,8 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (conf < minConf) return null;
   if (RSI > 74) return null; // don't chase
 
-  const sl    = cur - ATR * asset.slM;
-  const tp    = cur + ATR * asset.tpM;
+  const sl    = cur - ATR_SL * asset.slM;
+  const tp    = cur + ATR_SL * asset.tpM;
   const slDist = Math.abs(cur - sl);
   const tpDist = Math.abs(tp - cur);
   const rr    = tpDist / Math.max(slDist, 1e-9);
@@ -116,7 +121,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 /**
  * SHORT signal — mirror of LONG, bearish 6-factor
  */
-export function generateShortSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}) {
+export function generateShortSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}, regimeData = null) {
   if (closes.length < 72) return null;
 
   const n   = closes.length - 1;
@@ -137,15 +142,20 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const VWAP = vwap(highs, lows, closes, volumes, VWAP_WINDOW);
   const VR   = volumeRatio(volumes, 20);
 
+  // Use 1H ATR for SL/TP if available
+  const ATR_SL = (regimeData && regimeData.highs.length >= 14)
+    ? calcATR(regimeData.highs, regimeData.lows, regimeData.closes, 14)
+    : ATR;
+
   // Pre-filter: below EMA50 + trending
   if (ADX < ADX_MIN || cur > e50[n]) return null;
 
   // ── 6-Factor Bearish Confirmation ─────────────────────────
   const f1 = e8[n] < e13[n] && e13[n] < e21[n];  // EMA stack bear
   const f2 = cur < VWAP;                           // Below VWAP
-  const f3 = RSI > 26 && RSI < 62;                 // RSI not oversold yet
+  const f3 = RSI > 30 && RSI < 58;                 // RSI not oversold, not mid-range
   const f4 = MH < MH1;                             // MACD falling
-  const f5 = VR >= 0.85;                            // Volume active (crypto 24/7, no big surges needed)
+  const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
   const f6 = RSI < RSI2 && RSI2 < RSI3;           // RSI accelerating down
 
   const conf    = [f1, f2, f3, f4, f5, f6].filter(Boolean).length;
@@ -154,8 +164,8 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (RSI < 26) return null; // don't chase oversold
 
   // Short: SL above entry, TP below entry
-  const sl    = cur + ATR * asset.slM;
-  const tp    = cur - ATR * asset.tpM;
+  const sl    = cur + ATR_SL * asset.slM;
+  const tp    = cur - ATR_SL * asset.tpM;
   const slDist = Math.abs(sl - cur);
   const tpDist = Math.abs(cur - tp);
   const rr    = tpDist / Math.max(slDist, 1e-9);

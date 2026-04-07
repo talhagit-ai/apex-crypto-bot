@@ -21,7 +21,7 @@ import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams } from './optimizer.mjs';
 import { KrakenFuturesClient } from './kraken-futures-client.mjs';
-import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
+import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -272,6 +272,26 @@ app.get('/optimizer/params', (_req, res) => {
   res.json(loadParams());
 });
 
+// POST /api/reset — reset kill switch and sync to real balance
+app.post('/api/reset', async (_req, res) => {
+  await refreshBalances();
+  const bal = realBalances.spotUSD || 100;
+  engine.riskState.killed = false;
+  engine.riskState.dailyLoss = 0;
+  engine.riskState.weeklyLoss = 0;
+  engine.riskState.riskReduction = 1.0;
+  engine.riskState.startCapital = bal;
+  engine.riskState.consecutiveLosses = {};
+  engine.riskState.totalConsecutiveLosses = 0;
+  engine.capital = bal;
+  engine.cash = bal;
+  engine.positions = {};
+  engine.trades = [];
+  log.info(`Kill switch reset — capital synced to $${bal.toFixed(2)}`);
+  notifyStartup(bal, ASSETS.length);
+  res.json({ ok: true, capital: bal, msg: 'Kill switch reset, engine restarted' });
+});
+
 // ── WebSocket ─────────────────────────────────────────────────
 
 wss.on('connection', (ws, req) => {
@@ -352,12 +372,17 @@ async function runEngineTick() {
 
   // Snapshot state BEFORE tick to detect new entries/exits
   const prevPositions = new Set(Object.keys(engine.positions));
+  const prevQtySnapshot = {};
+  for (const [id, p] of Object.entries(engine.positions)) {
+    prevQtySnapshot[id] = p.qty;
+  }
 
   // Run engine logic (signal gen, position management)
+  const isDryRun = process.env.DRY_RUN === 'true';
   engine.tick(barData, regimeData);
 
-  // Detect changes and place real orders
-  await _syncOrders(prevPositions, barData);
+  // Detect changes and place real orders (or log in DRY_RUN mode)
+  await _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun);
 
   // Refresh real Kraken balances every tick
   await refreshBalances();
@@ -381,77 +406,162 @@ async function runEngineTick() {
 }
 
 /**
- * Detect engine decisions and execute real orders on Kraken
+ * Detect engine decisions and execute real orders on Kraken.
+ * Handles: new entries, partial exits, full exits, order failure rollback.
  */
-async function _syncOrders(prevPositions, barData) {
+async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
   const currentPositions = new Set(Object.keys(engine.positions));
 
-  // New entries: in current but not in prev
+  // ── 1. New Entries ─────────────────────────────────────────────
   for (const assetId of currentPositions) {
-    if (!prevPositions.has(assetId)) {
-      const pos = engine.positions[assetId];
-      const d   = barData[assetId];
-      if (!d) continue;
+    if (prevPositions.has(assetId)) continue;
+    const pos = engine.positions[assetId];
+    if (!pos || !barData[assetId]) continue;
 
+    // Pre-flight balance check: ensure real funds available
+    const cost = pos.qty * pos.entry;
+    if (pos.side !== 'short' && realBalances.spotCash !== undefined && realBalances.spotCash < cost * 0.5) {
+      log.warn(`SKIP ${assetId}: insufficient spot cash ($${realBalances.spotCash?.toFixed(2)} < $${(cost*0.5).toFixed(2)})`);
+      _rollbackPosition(assetId, pos);
+      continue;
+    }
+
+    if (isDryRun) {
+      log.signal(`DRY RUN: ${pos.side === 'short' ? 'SHORT' : 'BUY'} ${assetId}`, { qty: pos.qty, entry: pos.entry });
+      notifyBuy(assetId, pos.qty, pos.entry, pos.sl, pos.tp, 0); // notify even in dry run
+      continue;
+    }
+
+    if (pos.side === 'short') {
+      log.signal(`REAL ORDER: SHORT ${assetId}`, { qty: pos.qty, entry: pos.entry });
+      try {
+        await futures.openShort(assetId, pos.qty);
+        notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
+      } catch (err) {
+        log.error(`Futures short FAILED — rolling back ${assetId}`, { err: err.message });
+        _rollbackPosition(assetId, pos);
+        notifyError(`SHORT ${assetId} gefaald: ${err.message}`);
+      }
+    } else {
+      log.signal(`REAL ORDER: BUY ${assetId}`, { qty: pos.qty, entry: pos.entry });
+      const signal = {
+        asset: assetId, price: pos.entry, sl: pos.sl, tp: pos.tp, conf: 5,
+        rr: (pos.tp - pos.entry) / Math.max(pos.entry - pos.sl, 1e-9),
+      };
+      const fill = await orders.openPosition(signal, pos.qty);
+      if (fill) {
+        pos.entry = fill.fillPrice;
+        pos.peak = fill.fillPrice;
+        notifyBuy(assetId, pos.qty, fill.fillPrice, pos.sl, pos.tp, signal.conf || 3);
+      } else {
+        log.error(`Spot BUY FAILED — rolling back ${assetId}`);
+        _rollbackPosition(assetId, pos);
+        notifyError(`BUY ${assetId} gefaald — positie teruggedraaid`);
+      }
+    }
+  }
+
+  // ── 2. Partial Exits (position still exists but qty decreased) ─
+  for (const assetId of currentPositions) {
+    if (!prevPositions.has(assetId)) continue; // new entry, not partial
+    const prevQty    = prevQtySnapshot[assetId] || 0;
+    const currentQty = engine.positions[assetId]?.qty || 0;
+    if (currentQty >= prevQty) continue; // no partial taken
+
+    const partialQty = prevQty - currentQty;
+    const pos = engine.positions[assetId];
+    const price = barData[assetId]?.closes?.slice(-1)[0] || pos.entry;
+
+    log.signal(`REAL ORDER: PARTIAL SELL ${assetId}`, { qty: partialQty, price });
+
+    if (!isDryRun) {
       if (pos.side === 'short') {
-        // SHORT — place futures order
-        log.signal(`REAL ORDER: SHORT ${assetId}`, { qty: pos.qty, entry: pos.entry });
         try {
-          await futures.openShort(assetId, pos.qty);
-          notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
+          await futures.closeShort(assetId, partialQty);
         } catch (err) {
-          log.error(`Futures short failed for ${assetId}`, { err: err.message });
+          log.error(`Futures partial cover failed for ${assetId}`, { err: err.message });
         }
       } else {
-        // LONG — place spot buy order
-        log.signal(`REAL ORDER: BUY ${assetId}`, { qty: pos.qty, entry: pos.entry });
-        const signal = {
-          asset: assetId, price: pos.entry, sl: pos.sl, tp: pos.tp, conf: 5,
-          rr: (pos.tp - pos.entry) / Math.max(pos.entry - pos.sl, 1e-9),
-        };
-        const fill = await orders.openPosition(signal, pos.qty);
-        if (fill) {
-          pos.entry = fill.fillPrice;
-          pos.peak = fill.fillPrice;
-          notifyBuy(assetId, pos.qty, fill.fillPrice, pos.sl, pos.tp, signal.conf || 3);
-        }
+        await orders.closePosition(assetId, partialQty, price, 'PARTIAL');
       }
+    }
+
+    // Determine which partial
+    const partialNum = pos.partial2Taken ? 2 : pos.partial1Taken ? 1 : 0;
+    if (partialNum > 0) {
+      notifyPartial(assetId, partialNum, price, 0);
     }
   }
 
-  // Exits: in prev but not in current (engine closed it)
+  // ── 3. Full Exits (position gone from engine) ─────────────────
   for (const assetId of prevPositions) {
-    if (!currentPositions.has(assetId)) {
-      const exitTrade = engine.trades
-        .filter(t => t.id === assetId && ['SELL','COVER','PARTIAL1','PARTIAL2'].includes(t.side))
-        .slice(-1)[0];
+    if (currentPositions.has(assetId)) continue;
 
-      if (exitTrade) {
-        const closeQty = exitTrade.qty;
-        const reason   = exitTrade.reason || 'EXIT';
+    const exitTrade = engine.trades
+      .filter(t => t.id === assetId && ['SELL', 'COVER'].includes(t.side))
+      .slice(-1)[0];
+    if (!exitTrade) continue;
 
-        if (exitTrade.side === 'COVER') {
-          log.signal(`REAL ORDER: COVER ${assetId}`, { qty: closeQty, reason });
-          try {
-            await futures.closeShort(assetId, closeQty);
-            notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
-          } catch (err) {
-            log.error(`Futures cover failed for ${assetId}`, { err: err.message });
-          }
-        } else if (exitTrade.side === 'PARTIAL1') {
-          notifyPartial(assetId, 1, exitTrade.price, exitTrade.pnl || 0);
-          await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
-        } else if (exitTrade.side === 'PARTIAL2') {
-          notifyPartial(assetId, 2, exitTrade.price, exitTrade.pnl || 0);
-          await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
-        } else {
-          log.signal(`REAL ORDER: SELL ${assetId}`, { qty: closeQty, reason });
-          const result = await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
-          notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
-        }
+    const closeQty = exitTrade.qty;
+    const reason   = exitTrade.reason || 'EXIT';
+
+    if (isDryRun) {
+      log.signal(`DRY RUN: ${exitTrade.side} ${assetId}`, { qty: closeQty, reason });
+      continue;
+    }
+
+    if (exitTrade.side === 'COVER') {
+      log.signal(`REAL ORDER: COVER ${assetId}`, { qty: closeQty, reason });
+      try {
+        await futures.closeShort(assetId, closeQty);
+        notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
+      } catch (err) {
+        log.error(`Futures cover failed for ${assetId}`, { err: err.message });
+        notifyError(`COVER ${assetId} gefaald: ${err.message}`);
       }
+    } else {
+      log.signal(`REAL ORDER: SELL ${assetId}`, { qty: closeQty, reason });
+      const result = await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
+      notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
     }
   }
+}
+
+/** Reconcile engine positions vs real Kraken holdings every 5 minutes */
+async function reconcilePositions() {
+  try {
+    const raw = await kraken.api.balance();
+    const krakenHoldings = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const amt = parseFloat(v);
+      if (amt > 0.0001 && k !== 'ZUSD' && k !== 'ZEUR') {
+        const mapped = KRAKEN_ASSET_MAP[k];
+        if (mapped) krakenHoldings[mapped] = amt;
+      }
+    }
+
+    // Check each engine long position
+    for (const [assetId, pos] of Object.entries(engine.positions)) {
+      if (pos.side === 'short') continue; // futures, not spot
+      if (!krakenHoldings[assetId] || krakenHoldings[assetId] < pos.qty * 0.5) {
+        log.warn(`RECONCILE: Engine has ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
+        _rollbackPosition(assetId, pos);
+      }
+    }
+  } catch (e) {
+    log.warn('Reconciliation failed', { err: e.message });
+  }
+}
+
+/** Rollback engine position when real order fails */
+function _rollbackPosition(assetId, pos) {
+  if (pos.side === 'short') {
+    engine.cash += pos.margin || 0;
+  } else {
+    engine.cash += pos.qty * pos.entry;
+  }
+  delete engine.positions[assetId];
+  log.warn(`Rolled back engine position for ${assetId}`);
 }
 
 // ── Startup ───────────────────────────────────────────────────
@@ -477,6 +587,9 @@ async function start() {
 
   // Refresh balances every 60 seconds
   setInterval(refreshBalances, 60_000);
+
+  // Reconcile engine positions vs Kraken every 5 minutes
+  setInterval(reconcilePositions, 5 * 60_000);
 
   // 2. Fetch historical data
   await buffer.init();

@@ -206,7 +206,7 @@ export class TradingEngine {
         // ── Try LONG ──────────────────────────────────────────
         const bullRegime = checkRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         if (bullRegime) {
-          const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts);
+          const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd);
           if (sig) candidates.push({ asset: assetCfg, sig });
           else log.info(`Skip ${asset.id} LONG: signal rejected`);
         }
@@ -214,7 +214,7 @@ export class TradingEngine {
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         if (bearRegime && this.opts.enableShorts) {
-          const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts);
+          const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd);
           if (sig) candidates.push({ asset: assetCfg, sig });
           else log.info(`Skip ${asset.id} SHORT: signal rejected`);
         }
