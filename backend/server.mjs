@@ -65,14 +65,26 @@ async function refreshBalances() {
   try {
     const raw = await kraken.api.balance();
     const usdCash = parseFloat(raw?.ZUSD || raw?.USD || 0);
+    const eurCash = parseFloat(raw?.ZEUR || raw?.EUR || 0);
 
-    // Calculate total portfolio value = cash + value of all held coins
+    // Fetch EUR/USD rate to convert EUR to USD
+    let eurUsdRate = 1.09; // fallback
+    try {
+      const eurTicker = await kraken.api.ticker({ pair: 'EURUSD' });
+      const key = Object.keys(eurTicker)[0];
+      eurUsdRate = parseFloat(eurTicker[key]?.c?.[0] || 1.09);
+    } catch (_) {}
+
+    const eurInUsd = eurCash * eurUsdRate;
+    const totalCashUSD = usdCash + eurInUsd;
+
+    // Calculate value of all held coins
     const prices = buffer.currentPrices();
     let holdingsValue = 0;
     const holdings = {};
 
     for (const [krakenAsset, amtStr] of Object.entries(raw)) {
-      if (krakenAsset === 'ZUSD' || krakenAsset === 'ZEUR') continue;
+      if (krakenAsset === 'ZUSD' || krakenAsset === 'ZEUR' || krakenAsset === 'USD' || krakenAsset === 'EUR') continue;
       const amt = parseFloat(amtStr);
       if (amt < 0.0001) continue;
 
@@ -84,16 +96,17 @@ async function refreshBalances() {
 
       const value = amt * price;
       holdingsValue += value;
-      holdings[assetId] = { qty: amt, price, value: +value.toFixed(2) };
+      holdings[assetId] = { qty: +amt.toFixed(6), price, value: +value.toFixed(2) };
     }
 
-    const totalUSD = usdCash + holdingsValue;
+    const totalUSD = totalCashUSD + holdingsValue;
     realBalances.spotUSD      = totalUSD;
-    realBalances.spotCash     = usdCash;
+    realBalances.spotCash     = totalCashUSD;
+    realBalances.eurCash      = eurCash;
     realBalances.holdings     = holdings;
     realBalances.spotCurrency = 'USD';
 
-    log.info(`Portfolio: $${totalUSD.toFixed(2)} (cash $${usdCash.toFixed(2)} + holdings $${holdingsValue.toFixed(2)})`);
+    log.info(`Portfolio: $${totalUSD.toFixed(2)} (USD cash $${usdCash.toFixed(2)} + EUR cash €${eurCash.toFixed(2)} + coins $${holdingsValue.toFixed(2)})`);
 
     // Sync engine capital with real total portfolio value
     if (totalUSD > 0) {
