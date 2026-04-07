@@ -146,7 +146,7 @@ app.get('/health', (_req, res) => {
     prices,
     uptime: process.uptime(),
     tickCount,
-    params: liveParams._meta || null,
+    params: engine?.opts?.overrideParams?._meta || null,
   });
 });
 
