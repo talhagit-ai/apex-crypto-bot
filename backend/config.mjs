@@ -45,7 +45,7 @@ export const DAILY_LOSS_LIMIT_1  = 0.025;  // 2.5% → reduce risk 50% (3 positi
 export const DAILY_LOSS_LIMIT_2  = 0.040;  // 4.0% → stop 24h
 export const WEEKLY_LOSS_LIMIT_1 = 0.050;  // 5.0% → reduce size 50%
 export const WEEKLY_LOSS_LIMIT_2 = 0.080;  // 8.0% → stop entire week
-export const KILL_SWITCH_PCT     = 0.12;   // 12% drawdown → full stop
+export const KILL_SWITCH_PCT     = 0.09;   // 9% drawdown → full stop (snel beschermen)
 export const LOSS_LIMIT          = 4;      // Consecutive losses → pause asset
 export const PAUSE_MINUTES       = 60;     // Pause duration after consecutive losses
 export const TOTAL_LOSS_LIMIT    = 6;      // 6 losses across all → pause all
@@ -68,14 +68,14 @@ export const ADX_MIN    = 20;         // Min ADX — only strong trends, no chop
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
 export const REGIME_INTERVAL    = '60';   // 1-hour candles for regime filter
 export const HISTORY_BARS       = 150;    // Rolling buffer size
-export const VWAP_WINDOW        = 120;    // 10h rolling VWAP (fits in 150-bar buffer)
+export const VWAP_WINDOW        = 72;     // 6h rolling VWAP (crypto institutional cycles)
 
 // ── Peak Hours (UTC) ───────────────────────────────────────────
 export const PEAK_HOURS = [
   [13, 17],   // 13:00-17:00 UTC (US overlap, highest volume)
   [0, 2],     // 00:00-02:00 UTC (Asian session open)
 ];
-export const OFF_PEAK_RISK_MULT = 0.60; // 60% risk during off-peak hours
+export const OFF_PEAK_RISK_MULT = 0.85; // 85% risk during off-peak (crypto is 24/7)
 
 // ── Dynamic Risk Scaling ───────────────────────────────────────
 export const DYNAMIC_RISK = {

@@ -177,7 +177,7 @@ app.get('/api/test', async (_req, res) => {
 
 // Helper: merge real balances into engine state
 function getFullState(prices) {
-  return { ...engine.getState(prices), realBalances };
+  return { ...engine.getState(prices), realBalances, prices };
 }
 
 // REST: get current state

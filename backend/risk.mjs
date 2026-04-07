@@ -26,6 +26,8 @@ export function createRiskState(capital) {
     weeklyLoss: 0,
     dailyResetUTC: currentDayUTC(),
     weeklyResetUTC: currentWeekUTC(),
+    dailyLossLog: [],            // rolling 24h: [{ pnl, timestamp }, ...]
+    weeklyLossLog: [],           // rolling 7d: [{ pnl, timestamp }, ...]
     consecutiveLosses: {},       // per asset: { BTCUSDT: 2, ... }
     totalConsecutiveLosses: 0,
     pauseUntil: {},              // per asset: { BTCUSDT: timestamp, ... }
@@ -49,23 +51,29 @@ function currentWeekUTC() {
 }
 
 /**
- * Check and reset daily/weekly counters if new period
+ * Check and prune rolling loss windows (24h daily, 7d weekly)
  */
 export function checkPeriodReset(state) {
-  const today = currentDayUTC();
-  if (state.dailyResetUTC !== today) {
-    state.dailyLoss = 0;
-    state.dailyResetUTC = today;
-    state.riskReduction = Math.max(state.riskReduction, 1.0); // restore after daily reset
-    log.info('Daily loss counter reset');
-  }
+  const now = Date.now();
+  const DAY_MS  = 24 * 60 * 60 * 1000;
+  const WEEK_MS = 7 * DAY_MS;
 
-  const week = currentWeekUTC();
-  if (state.weeklyResetUTC !== week) {
-    state.weeklyLoss = 0;
-    state.weeklyResetUTC = week;
-    log.info('Weekly loss counter reset');
+  // Rolling 24h daily loss
+  if (!state.dailyLossLog) state.dailyLossLog = [];
+  state.dailyLossLog = state.dailyLossLog.filter(e => now - e.timestamp < DAY_MS);
+  const newDailyLoss = state.dailyLossLog.reduce((s, e) => s + e.pnl, 0);
+
+  // Restore risk if daily loss recovered
+  if (state.dailyLoss > 0 && newDailyLoss < state.dailyLoss) {
+    state.riskReduction = Math.max(state.riskReduction, 1.0);
+    log.info('Daily loss window pruned — risk restored');
   }
+  state.dailyLoss = newDailyLoss;
+
+  // Rolling 7d weekly loss
+  if (!state.weeklyLossLog) state.weeklyLossLog = [];
+  state.weeklyLossLog = state.weeklyLossLog.filter(e => now - e.timestamp < WEEK_MS);
+  state.weeklyLoss = state.weeklyLossLog.reduce((s, e) => s + e.pnl, 0);
 }
 
 /**
@@ -76,6 +84,11 @@ export function recordTradeResult(state, assetId, pnl, capital) {
 
   if (isLoss) {
     const absLoss = Math.abs(pnl);
+    // Add to rolling loss logs
+    if (!state.dailyLossLog) state.dailyLossLog = [];
+    if (!state.weeklyLossLog) state.weeklyLossLog = [];
+    state.dailyLossLog.push({ pnl: absLoss, timestamp: Date.now() });
+    state.weeklyLossLog.push({ pnl: absLoss, timestamp: Date.now() });
     state.dailyLoss += absLoss;
     state.weeklyLoss += absLoss;
     state.consecutiveLosses[assetId] = (state.consecutiveLosses[assetId] || 0) + 1;

@@ -84,6 +84,8 @@ if (ANTHROPIC_KEY) {
 
 // Conversation history per chat_id → [{role, content}]
 const conversations = new Map();
+// Rate limiting per chat_id → timestamp of last AI message
+const lastMessageTime = new Map();
 
 // Injected by server.mjs so we can access live bot state
 let getStateFn = null;
@@ -98,9 +100,13 @@ function buildSystemPrompt(state) {
   const posCount  = Object.keys(positions).length;
 
   let posStr = 'Geen open posities';
+  const prices = state?.prices || {};
   if (posCount > 0) {
     posStr = Object.entries(positions).map(([id, p]) => {
-      const pnl = p.unrealizedPnl ?? 0;
+      const curPrice = prices[id] || p.entry || 0;
+      const pnl = p.side === 'short'
+        ? (p.entry - curPrice) * p.qty
+        : (curPrice - p.entry) * p.qty;
       const sign = pnl >= 0 ? '+' : '';
       return `  • ${id} (${p.side}): ${p.qty} @ $${(p.entry || 0).toFixed(2)}, PnL: ${sign}$${pnl.toFixed(2)}`;
     }).join('\n');
@@ -119,7 +125,8 @@ function buildSystemPrompt(state) {
 
 LIVE STATUS — ${now}
 ━━━━━━━━━━━━━━━━━━━━━━
-Portfolio: $${equity.toFixed(2)} (cash: $${cash.toFixed(2)})
+Engine equity: $${equity.toFixed(2)} (cash: $${cash.toFixed(2)})
+Kraken balans: $${(state?.realBalances?.spotUSD ?? 0).toFixed(2)} (spot cash: $${(state?.realBalances?.spotCash ?? 0).toFixed(2)})
 Open posities (${posCount}):
 ${posStr}
 
@@ -188,6 +195,15 @@ export async function handleWebhookUpdate(update) {
   const userText = msg.text.trim();
 
   log.info(`Telegram message from ${chatId}: "${userText.slice(0, 60)}"`);
+
+  // Rate limiting: max 1 AI call per 3 seconds per chat
+  const now = Date.now();
+  const lastTime = lastMessageTime.get(chatId) || 0;
+  if (now - lastTime < 3000) {
+    send('Even geduld...', chatId);
+    return;
+  }
+  lastMessageTime.set(chatId, now);
 
   // Typing indicator
   fetch(`https://api.telegram.org/bot${TOKEN}/sendChatAction`, {

@@ -229,6 +229,10 @@ export class TradingEngine {
       // Sort: highest confidence first, then best R:R
       candidates.sort((a, b) => b.sig.conf - a.sig.conf || b.sig.rr - a.sig.rr);
 
+      // Track available capital separately to prevent overleverage when
+      // multiple positions are opened in the same tick
+      let availableCash = this.cash;
+
       for (const { asset, sig } of candidates) {
         if (Object.keys(this.positions).length >= MAX_POS) break;
 
@@ -239,11 +243,11 @@ export class TradingEngine {
         }
 
         const posOpts = this.opts.simMode ? { peakMult: 0.85 } : {};
-        const qty = calculatePositionSize(sig, this.cash, this.riskState, posOpts);
+        const qty = calculatePositionSize(sig, availableCash, this.riskState, posOpts);
         if (qty <= 0) continue;
 
         const cost = qty * sig.price;
-        if (cost > this.cash * 0.88) continue;
+        if (cost > availableCash * 0.88) continue;
 
         const isShort = sig.side === 'short';
         const slDist  = Math.abs(sig.price - sig.sl);
@@ -251,10 +255,12 @@ export class TradingEngine {
         // Long: deduct cost from cash. Short: futures margin (10% of notional)
         if (isShort) {
           const margin = cost * 0.10;
-          if (margin > this.cash * 0.30) continue; // max 30% cash as margin
+          if (margin > availableCash * 0.30) continue; // max 30% cash as margin
           this.cash -= margin;
+          availableCash -= margin;
         } else {
           this.cash -= cost;
+          availableCash -= cost;
         }
 
         this.positions[asset.id] = {

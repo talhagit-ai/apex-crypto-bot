@@ -42,6 +42,14 @@ export class OrderManager {
 
     const fillPrice = await this._waitForFill(pair, result.orderId, signalPrice);
 
+    // Slippage monitoring
+    if (fillPrice && signalPrice) {
+      const slippage = Math.abs(fillPrice - signalPrice) / signalPrice;
+      if (slippage > MAX_SLIPPAGE) {
+        log.warn(`Slippage exceeded: ${(slippage * 100).toFixed(2)}% on BUY ${assetId}`, { fillPrice, signalPrice });
+      }
+    }
+
     log.trade(`ORDER FILLED BUY ${assetId}`, {
       orderId: result.orderId,
       qty,
@@ -91,6 +99,14 @@ export class OrderManager {
 
     const fillPrice = await this._waitForFill(pair, result.orderId, signalPrice);
     const actualPrice = fillPrice || signalPrice;
+
+    // Slippage monitoring
+    if (fillPrice && signalPrice) {
+      const slippage = Math.abs(fillPrice - signalPrice) / signalPrice;
+      if (slippage > MAX_SLIPPAGE) {
+        log.warn(`Slippage exceeded: ${(slippage * 100).toFixed(2)}% on SELL ${assetId}`, { fillPrice, signalPrice });
+      }
+    }
 
     const pnl = (actualPrice - entryPrice) * qty;
     const feeCost = actualPrice * qty * FEE_RATE * 2; // round-trip fee
