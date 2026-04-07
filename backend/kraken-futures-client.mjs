@@ -91,14 +91,12 @@ export class KrakenFuturesClient {
    */
   async getBalance() {
     const data = await this._request('GET', '/accounts');
-    // Log raw response to find correct field structure
-    log.info('Futures accounts raw', { raw: JSON.stringify(data).slice(0, 300) });
-    // Try multiple known structures
-    const fi  = data.accounts?.fi?.balances;
-    const flex = data.accounts?.flex?.balances;
-    const cash = data.accounts?.cash?.balances;
-    const balances = fi || flex || cash || {};
-    return parseFloat(balances?.USD || balances?.USDT || balances?.XBT || 0);
+    // Kraken Futures flex account: accounts.flex.currencies.USD.quantity
+    const flexUSD = data.accounts?.flex?.currencies?.USD?.quantity;
+    if (flexUSD !== undefined) return parseFloat(flexUSD);
+    // Fallback: cash account USD
+    const cashUSD = data.accounts?.cash?.balances?.usd;
+    return parseFloat(cashUSD || 0);
   }
 
   /**
