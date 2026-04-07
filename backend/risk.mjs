@@ -196,6 +196,10 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   // Cap at max risk per trade
   baseRisk = Math.min(baseRisk, MAX_RISK_PER_TRADE);
 
+  // IMPORTANT: size based on real starting capital, not inflated internal cash.
+  // Internal cash can grow from paper wins while real account has not changed.
+  capital = Math.min(capital, state.startCapital);
+
   // Dynamic risk scaling based on recent wins/losses
   const winCount = state.recentTrades.filter(t => t.win).length;
   const dynamicMult = DYNAMIC_RISK[winCount] ?? 1.0;

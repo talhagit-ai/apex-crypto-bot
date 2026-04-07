@@ -48,10 +48,17 @@ let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
 async function refreshBalances() {
   try {
     const raw = await kraken.api.balance();
-    const usd  = parseFloat(raw?.ZUSD || raw?.USD  || 0);
+    const usd = parseFloat(raw?.ZUSD || raw?.USD || 0);
     realBalances.spotUSD      = usd;
     realBalances.spotCurrency = 'USD';
-    log.info(`Spot balance: $${realBalances.spotUSD.toFixed(2)} USD`);
+    log.info(`Spot balance: $${usd.toFixed(2)} USD`);
+
+    // Keep engine capital in sync with real account
+    // This ensures position sizing never exceeds real funds
+    if (usd > 0) {
+      engine.capital         = usd;
+      engine.riskState.startCapital = usd;
+    }
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });
   }
