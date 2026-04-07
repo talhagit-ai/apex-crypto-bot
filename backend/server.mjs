@@ -13,29 +13,25 @@ import {
   ASSETS, CAPITAL, SERVER_PORT,
   CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS,
 } from './config.mjs';
-import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory } from './persistence.mjs';
+import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState } from './persistence.mjs';
 import { log } from './logger.mjs';
 import { TradingEngine } from './engine.mjs';
 import { KrakenClient } from './kraken-client.mjs';
 import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
-import { runOptimization, startOptimizationSchedule, loadParams } from './optimizer.mjs';
+import { runOptimization, startOptimizationSchedule, loadParams, loadParamsSync } from './optimizer.mjs';
 import { KrakenFuturesClient } from './kraken-futures-client.mjs';
 import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
-const db     = initDB();
-const kraken = new KrakenClient();
-
-// Load optimizer params on startup (falls back to defaults)
-const liveParams = loadParams();
-log.info('Loaded params', { source: liveParams._meta ? 'params.json' : 'defaults' });
-
+const kraken  = new KrakenClient();
 const futures = new KrakenFuturesClient();
 const buffer  = new CandleBuffer(kraken);
-const engine  = new TradingEngine(CAPITAL, { overrideParams: liveParams, enableShorts: ENABLE_SHORTS });
 const orders  = new OrderManager(kraken);
+
+// Engine + DB initialized async in start()
+let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS });
 
 let wsClients = new Set();
 let tickCount  = 0;
@@ -299,8 +295,8 @@ app.post('/optimize', async (_req, res) => {
 });
 
 // GET history of past optimizer runs
-app.get('/optimizer/history', (_req, res) => {
-  res.json(getOptimizerHistory(20));
+app.get('/optimizer/history', async (_req, res) => {
+  res.json(await getOptimizerHistory(20));
 });
 
 // GET current active params
@@ -431,8 +427,15 @@ async function runEngineTick() {
   // Save equity snapshot every 12 ticks (= 1 hour)
   if (tickCount % 12 === 0) {
     const unrealized = state.equity - state.cash;
-    saveEquitySnapshot(state.equity, state.cash, unrealized);
+    saveEquitySnapshot(state.equity, state.cash, unrealized).catch(() => {});
   }
+
+  // Save engine state after every tick (survive restarts)
+  saveEngineState({
+    positions: engine.positions,
+    cash:      engine.cash,
+    riskState: engine.riskState,
+  }).catch(() => {});
 
   log.info(`Tick #${tickCount}`, {
     positions: Object.keys(engine.positions).length,
@@ -605,9 +608,28 @@ function _rollbackPosition(assetId, pos) {
 async function start() {
   log.info('═══════════════════════════════════════════════════════════');
   log.info('  APEX CRYPTO V2 — STARTING (Kraken)');
-  log.info(`  Capital: €${CAPITAL} | Assets: ${ASSETS.map(a => a.id).join(', ')}`);
+  log.info(`  Capital: $${CAPITAL} | Assets: ${ASSETS.map(a => a.id).join(', ')}`);
   log.info(`  Shorts: ${ENABLE_SHORTS ? 'ENABLED (Kraken Futures)' : 'DISABLED (spot only)'}`);
   log.info('═══════════════════════════════════════════════════════════');
+
+  // 0. Initialize database (Turso or local SQLite)
+  await initDB();
+
+  // Load optimizer params from DB (overrides defaults)
+  const savedParams = await loadParams();
+  if (savedParams._meta) {
+    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS });
+    log.info('Loaded optimizer params from DB', savedParams._meta);
+  }
+
+  // Restore engine state if recent (< 30 min old)
+  const savedState = await loadEngineState();
+  if (savedState) {
+    engine.positions = savedState.positions || {};
+    engine.cash      = savedState.cash      ?? engine.cash;
+    engine.riskState = { ...engine.riskState, ...savedState.riskState };
+    log.info(`Engine state restored: ${Object.keys(engine.positions).length} positions, cash $${engine.cash?.toFixed(2)}`);
+  }
 
   // 1. Fetch real Kraken balances
   await refreshBalances();
@@ -670,9 +692,11 @@ async function shutdown(signal) {
   for (const ws of wsClients) ws.close();
   kraken.disconnect();
 
-  http.close(() => {
+  http.close(async () => {
     log.info('HTTP server closed');
-    closeDB();
+    // Save engine state before exit
+    await saveEngineState({ positions: engine.positions, cash: engine.cash, riskState: engine.riskState }).catch(() => {});
+    await closeDB();
     process.exit(0);
   });
 

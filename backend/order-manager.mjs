@@ -68,7 +68,7 @@ export class OrderManager {
       reason: `${signal.conf}/6 conf | R:R ${signal.rr}`,
       timestamp: Date.now(),
     };
-    saveTrade(trade);
+    saveTrade(trade).catch(() => {});
 
     return {
       orderId: result.orderId,
@@ -130,7 +130,7 @@ export class OrderManager {
       reason,
       timestamp: Date.now(),
     };
-    saveTrade(trade);
+    saveTrade(trade).catch(() => {});
 
     return { fillPrice: actualPrice, pnl: netPnl };
   }

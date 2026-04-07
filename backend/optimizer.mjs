@@ -12,16 +12,10 @@
 //  Runs: every Sunday 02:00 UTC + manual via POST /optimize
 // ═══════════════════════════════════════════════════════════════
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { ASSETS, CAPITAL } from './config.mjs';
 import { TradingEngine } from './engine.mjs';
 import { log } from './logger.mjs';
-import { getRecentTrades, saveOptimizerRun } from './persistence.mjs';
-
-const __dir    = dirname(fileURLToPath(import.meta.url));
-const PARAMS_FILE = join(__dir, '..', 'params.json');
+import { getRecentTrades, saveOptimizerRun, saveState, loadState } from './persistence.mjs';
 
 // ── Default params (baseline — matches config.mjs) ─────────────
 const DEFAULT_PARAMS = {
@@ -64,15 +58,22 @@ const MAX_CHANGE_PCT  = 0.20;
 // ── Public API ─────────────────────────────────────────────────
 
 /**
- * Load current params (falls back to defaults if no file yet)
+ * Load current params from DB (falls back to defaults)
  */
-export function loadParams() {
-  if (!existsSync(PARAMS_FILE)) return { ...DEFAULT_PARAMS };
+export async function loadParams() {
   try {
-    return JSON.parse(readFileSync(PARAMS_FILE, 'utf8'));
+    const saved = await loadState('params');
+    return saved || { ...DEFAULT_PARAMS };
   } catch {
     return { ...DEFAULT_PARAMS };
   }
+}
+
+/**
+ * Sync version for places that can't await (returns defaults, async load happens in start())
+ */
+export function loadParamsSync() {
+  return { ...DEFAULT_PARAMS };
 }
 
 /**
@@ -86,7 +87,7 @@ export async function runOptimization() {
   log.info('═══ OPTIMIZER: Starting weekly optimization run ═══');
 
   // 1. Load recent trades
-  const trades = getRecentTrades(150);
+  const trades = await getRecentTrades(150);
   if (trades.length < 20) {
     log.info('Optimizer: Not enough trades yet (need 20+). Skipping.');
     return { status: 'skipped', reason: 'insufficient_trades', count: trades.length };
@@ -99,7 +100,7 @@ export async function runOptimization() {
   log.info('Optimizer: Analysis complete', analysis.summary);
 
   // 3. Get current params as baseline
-  const current = loadParams();
+  const current = await loadParams();
   const baselineScore = await evaluateParams(current);
   log.info(`Optimizer: Baseline score = €${baselineScore.avgPnl.toFixed(2)}/week, worst = €${baselineScore.worst.toFixed(2)}`);
 
@@ -132,7 +133,7 @@ export async function runOptimization() {
 
   if (improvements > 0 && bestParams !== current) {
     const pnlGain = bestScore.avgPnl - baselineScore.avgPnl;
-    saveParams(bestParams, baselineScore, bestScore);
+    await saveParams(bestParams, baselineScore, bestScore);
     log.info(`Optimizer: ✓ Applied new params — +€${pnlGain.toFixed(2)}/week improvement`);
 
     const result = {
@@ -145,7 +146,7 @@ export async function runOptimization() {
       changes:     diffParams(current, bestParams),
     };
 
-    saveOptimizerRun(result);
+    await saveOptimizerRun(result);
     return result;
   }
 
@@ -156,7 +157,7 @@ export async function runOptimization() {
     tradesUsed: trades.length,
     elapsed,
   };
-  saveOptimizerRun(result);
+  await saveOptimizerRun(result);
   return result;
 }
 
@@ -424,7 +425,7 @@ function generateSyntheticBars(asset, count) {
 
 // ── Parameter Store ────────────────────────────────────────────
 
-function saveParams(params, before, after) {
+async function saveParams(params, before, after) {
   const data = {
     ...params,
     _meta: {
@@ -434,8 +435,8 @@ function saveParams(params, before, after) {
       improvement: +(((after.avgPnl - before.avgPnl) / Math.abs(before.avgPnl)) * 100).toFixed(1) + '%',
     },
   };
-  writeFileSync(PARAMS_FILE, JSON.stringify(data, null, 2));
-  log.info('Optimizer: params.json updated', data._meta);
+  await saveState('params', data);
+  log.info('Optimizer: params saved to DB', data._meta);
 }
 
 function diffParams(a, b) {
