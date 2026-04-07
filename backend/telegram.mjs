@@ -174,85 +174,75 @@ async function handleMessage(chatId, userText) {
   }
 }
 
-// ── Telegram Long Polling ──────────────────────────────────────
+// ── Telegram Webhook Handler ───────────────────────────────────
 
-let lastUpdateId = 0;
-let pollingActive = false;
+/**
+ * Process an incoming update from Telegram webhook.
+ * Called by server.mjs POST /telegram-webhook
+ */
+export async function handleWebhookUpdate(update) {
+  const msg = update.message;
+  if (!msg?.text) return;
 
-async function pollTelegram() {
-  if (!TOKEN || !pollingActive) return;
+  const chatId   = String(msg.chat.id);
+  const userText = msg.text.trim();
 
-  try {
-    const url  = `https://api.telegram.org/bot${TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=20&allowed_updates=["message"]`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(25_000) });
-    const data = await resp.json();
+  log.info(`Telegram message from ${chatId}: "${userText.slice(0, 60)}"`);
 
-    if (!data.ok) {
-      log.warn('Telegram getUpdates not ok', { desc: data.description });
-    } else {
-      for (const update of data.result || []) {
-        lastUpdateId = update.update_id;
+  // Typing indicator
+  fetch(`https://api.telegram.org/bot${TOKEN}/sendChatAction`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ chat_id: chatId, action: 'typing' }),
+  }).catch(() => {});
 
-        const msg = update.message;
-        if (!msg?.text) continue;
-
-        const chatId   = String(msg.chat.id);
-        const userText = msg.text.trim();
-
-        log.info(`Telegram message from ${chatId}: "${userText.slice(0, 60)}"`);
-
-        // Show typing indicator
-        fetch(`https://api.telegram.org/bot${TOKEN}/sendChatAction`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ chat_id: chatId, action: 'typing' }),
-        }).catch(() => {});
-
-        // Get AI reply (async — don't block polling)
-        handleMessage(chatId, userText).then(reply => {
-          send(reply, chatId);
-        }).catch(err => {
-          send(`⚠️ Fout: ${err.message}`, chatId);
-        });
-      }
-    }
-  } catch (_) {
-    // Timeout or network error — just retry
-  }
-
-  // Always reschedule
-  setTimeout(pollTelegram, 1000);
+  // Reply async
+  handleMessage(chatId, userText).then(reply => {
+    send(reply, chatId);
+  }).catch(err => {
+    send(`⚠️ Fout: ${err.message}`, chatId);
+  });
 }
 
 /**
- * Call this from server.mjs after startup.
+ * Register webhook with Telegram and start chat.
  * @param {() => object} stateFn — returns current engine state
+ * @param {string} publicUrl — e.g. https://apex-crypto-bot-c3bt.onrender.com
  */
-export async function startTelegramChat(stateFn) {
-  getStateFn    = stateFn;
-  pollingActive = true;
+export async function startTelegramChat(stateFn, publicUrl) {
+  getStateFn = stateFn;
 
   if (!TOKEN) {
     log.warn('Telegram chat disabled (TELEGRAM_TOKEN not set)');
     return;
   }
   if (!ANTHROPIC_KEY) {
-    log.warn('Telegram AI chat disabled (ANTHROPIC_API_KEY not set) — notifications still work');
+    log.warn('Telegram AI disabled (ANTHROPIC_API_KEY not set) — notifications still work');
   }
 
-  // Delete any webhook and clear conflicts before polling
+  if (!publicUrl) {
+    log.warn('Telegram webhook: PUBLIC_URL not set — chat disabled');
+    return;
+  }
+
+  const webhookUrl = `${publicUrl}/telegram-webhook`;
   try {
-    await fetch(`https://api.telegram.org/bot${TOKEN}/deleteWebhook?drop_pending_updates=true`);
-    // Get current update_id to skip old messages
-    const resp = await fetch(`https://api.telegram.org/bot${TOKEN}/getUpdates?offset=-1`);
+    const resp = await fetch(`https://api.telegram.org/bot${TOKEN}/setWebhook`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        url:             webhookUrl,
+        allowed_updates: ['message'],
+        drop_pending_updates: true,
+      }),
+    });
     const data = await resp.json();
-    const updates = data.result || [];
-    if (updates.length > 0) lastUpdateId = updates[updates.length - 1].update_id;
-    log.info(`Telegram: cleared conflicts, starting from update_id ${lastUpdateId}`);
+    if (data.ok) {
+      log.info(`Telegram webhook set: ${webhookUrl}`);
+    } else {
+      log.warn('Telegram webhook set failed', { desc: data.description });
+    }
   } catch (e) {
-    log.warn('Telegram pre-poll cleanup failed', { err: e.message });
+    log.warn('Telegram webhook setup failed', { err: e.message });
   }
-
-  log.info('Telegram AI chat polling started');
-  pollTelegram();
 }

@@ -21,7 +21,7 @@ import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams } from './optimizer.mjs';
 import { KrakenFuturesClient } from './kraken-futures-client.mjs';
-import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, startTelegramChat } from './telegram.mjs';
+import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -133,6 +133,12 @@ app.get('/state', (_req, res) => {
 // REST: get recent trades
 app.get('/trades', (_req, res) => {
   res.json(engine.trades.slice(-200));
+});
+
+// Telegram webhook endpoint
+app.post('/telegram-webhook', (req, res) => {
+  res.sendStatus(200); // acknowledge immediately
+  handleWebhookUpdate(req.body).catch(() => {});
 });
 
 // REST: debug balances
@@ -406,8 +412,9 @@ async function start() {
   log.info('Bot is running. Waiting for bar closes...');
   notifyStartup(CAPITAL, ASSETS.length);
 
-  // Start Telegram AI chat polling
-  await startTelegramChat(() => getFullState(buffer.currentPrices()));
+  // Start Telegram AI chat (webhook mode — no polling conflicts)
+  const publicUrl = process.env.PUBLIC_URL || `https://apex-crypto-bot-c3bt.onrender.com`;
+  await startTelegramChat(() => getFullState(buffer.currentPrices()), publicUrl);
 }
 
 // ── Graceful Shutdown ─────────────────────────────────────────
