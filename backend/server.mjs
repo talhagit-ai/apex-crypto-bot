@@ -45,19 +45,60 @@ let tickTimer  = null; // fires engine tick when not all assets close in time
 // Real Kraken balances (refreshed every 60s)
 let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
 
+// Kraken asset name → our asset id mapping
+const KRAKEN_ASSET_MAP = {
+  'XXBT': 'BTCUSDT', 'XBT': 'BTCUSDT',
+  'XETH': 'ETHUSDT', 'ETH': 'ETHUSDT',
+  'SOL':  'SOLUSDT', 'XXRP': 'XRPUSDT', 'XRP': 'XRPUSDT',
+  'ADA':  'ADAUSDT', 'DOT': 'DOTUSD',   'LINK': 'LINKUSD',
+  'AVAX': 'AVAXUSD', 'ATOM': 'ATOMUSD', 'UNI':  'UNIUSD',
+  'XLTC': 'LTCUSD',  'LTC': 'LTCUSD',  'POL':  'POLUSD',
+  'XXDG': 'DOGEUSD', 'DOGE': 'DOGEUSD', 'ALGO': 'ALGOUSD',
+  'NEAR': 'NEARUSD', 'FIL':  'FILUSD',  'AAVE': 'AAVEUSD',
+  'GRT':  'GRTUSD',  'SNX':  'SNXUSD',  'CRV':  'CRVUSD',
+  'COMP': 'COMPUSD', 'ENJ':  'ENJUSD',  'FLOW': 'FLOWUSD',
+  'KSM':  'KSMUSD',  'SAND': 'SANDUSD', 'MANA': 'MANAUSD',
+  'AXS':  'AXSUSD',  '1INCH':'1INCHUSD','OCEAN':'OCEANUSD',
+};
+
 async function refreshBalances() {
   try {
     const raw = await kraken.api.balance();
-    const usd = parseFloat(raw?.ZUSD || raw?.USD || 0);
-    realBalances.spotUSD      = usd;
-    realBalances.spotCurrency = 'USD';
-    log.info(`Spot balance: $${usd.toFixed(2)} USD`);
+    const usdCash = parseFloat(raw?.ZUSD || raw?.USD || 0);
 
-    // Keep engine capital in sync with real account
-    // This ensures position sizing never exceeds real funds
-    if (usd > 0) {
-      engine.capital         = usd;
-      engine.riskState.startCapital = usd;
+    // Calculate total portfolio value = cash + value of all held coins
+    const prices = buffer.currentPrices();
+    let holdingsValue = 0;
+    const holdings = {};
+
+    for (const [krakenAsset, amtStr] of Object.entries(raw)) {
+      if (krakenAsset === 'ZUSD' || krakenAsset === 'ZEUR') continue;
+      const amt = parseFloat(amtStr);
+      if (amt < 0.0001) continue;
+
+      const assetId = KRAKEN_ASSET_MAP[krakenAsset];
+      if (!assetId) continue;
+
+      const price = prices[assetId];
+      if (!price) continue;
+
+      const value = amt * price;
+      holdingsValue += value;
+      holdings[assetId] = { qty: amt, price, value: +value.toFixed(2) };
+    }
+
+    const totalUSD = usdCash + holdingsValue;
+    realBalances.spotUSD      = totalUSD;
+    realBalances.spotCash     = usdCash;
+    realBalances.holdings     = holdings;
+    realBalances.spotCurrency = 'USD';
+
+    log.info(`Portfolio: $${totalUSD.toFixed(2)} (cash $${usdCash.toFixed(2)} + holdings $${holdingsValue.toFixed(2)})`);
+
+    // Sync engine capital with real total portfolio value
+    if (totalUSD > 0) {
+      engine.capital                = totalUSD;
+      engine.riskState.startCapital = totalUSD;
     }
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });

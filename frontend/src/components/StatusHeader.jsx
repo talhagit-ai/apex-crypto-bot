@@ -18,7 +18,8 @@ export function StatusHeader({ state, status, lastPing }) {
   const killed   = state?.risk?.killed      ?? false;
   const reduced  = (state?.risk?.riskReduction ?? 1) < 1;
 
-  const spotUSD    = state?.realBalances?.spotUSD     ?? null;
+  const spotUSD    = state?.realBalances?.spotUSD    ?? null;
+  const spotCash   = state?.realBalances?.spotCash   ?? null;
   const futuresUSD = state?.realBalances?.futuresUSD ?? null;
 
   const pnlColor = pnl >= 0 ? '#22d3ee' : '#f87171';
@@ -39,10 +40,15 @@ export function StatusHeader({ state, status, lastPing }) {
       <div style={styles.centre}>
         <div style={styles.balances}>
           <div style={styles.balanceItem}>
-            <span style={styles.balanceLabel}>Spot</span>
+            <span style={styles.balanceLabel}>Portfolio</span>
             <span style={styles.balanceValue}>
               {spotUSD !== null ? `$${spotUSD.toFixed(2)}` : '—'}
             </span>
+            {spotCash !== null && spotUSD !== null && (
+              <span style={{ color: '#475569', fontSize: 9 }}>
+                cash ${spotCash.toFixed(2)}
+              </span>
+            )}
           </div>
           <div style={{ color: '#334155', fontSize: 16, margin: '0 6px' }}>|</div>
           <div style={styles.balanceItem}>
