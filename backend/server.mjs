@@ -121,8 +121,19 @@ async function refreshBalances() {
 
     // Sync engine capital with real total portfolio value
     if (totalUSD > 0) {
-      engine.capital                = totalUSD;
-      engine.riskState.startCapital = totalUSD;
+      engine.capital = totalUSD;
+      // startCapital must match what equity() returns (cash-based), otherwise
+      // kill switch fires immediately on startup (holdings not in engine.cash).
+      // Use spotCash so kill switch threshold is based on tradable cash only.
+      engine.riskState.startCapital = totalCashUSD || totalUSD;
+
+      // After fresh balance fetch, reset kill/circuit-breaker if portfolio healthy.
+      // Previous session may have triggered it; real account is the source of truth.
+      if (engine.riskState.killed || engine.riskState.riskReduction === 0) {
+        log.info('Balance refresh: resetting kill switch — portfolio confirmed healthy');
+        engine.riskState.killed = false;
+        engine.riskState.riskReduction = 1.0;
+      }
     }
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });
