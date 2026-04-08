@@ -15,6 +15,9 @@ export const KRAKEN_FUTURES_API_KEY     = process.env.KRAKEN_FUTURES_API_KEY    
 export const KRAKEN_FUTURES_API_SECRET  = process.env.KRAKEN_FUTURES_API_SECRET  || process.env.KRAKEN_API_SECRET || '';
 // Enable short selling via Kraken Futures (requires futures API keys)
 export const ENABLE_SHORTS = process.env.ENABLE_SHORTS === 'true';
+// Paper-trade shorts: engine generates short signals and tracks internally,
+// but no real futures orders are placed. Use to validate signals before going live.
+export const DRY_RUN_SHORTS = process.env.DRY_RUN_SHORTS === 'true';
 // Legacy Bybit keys (kept for reference)
 export const BYBIT_API_KEY    = process.env.BYBIT_API_KEY || '';
 export const BYBIT_API_SECRET = process.env.BYBIT_API_SECRET || '';

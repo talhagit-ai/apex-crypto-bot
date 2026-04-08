@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
   ASSETS, CAPITAL, SERVER_PORT,
-  CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS,
+  CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
 } from './config.mjs';
 import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState } from './persistence.mjs';
 import { log } from './logger.mjs';
@@ -31,7 +31,7 @@ const buffer  = new CandleBuffer(kraken);
 const orders  = new OrderManager(kraken);
 
 // Engine + DB initialized async in start()
-let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS });
+let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS });
 
 let wsClients = new Set();
 let tickCount  = 0;
@@ -455,6 +455,7 @@ async function runEngineTick() {
  * Handles: new entries, partial exits, full exits, order failure rollback.
  */
 async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
+  const isDryRunShorts = DRY_RUN_SHORTS && !isDryRun; // paper-trade shorts only
   const currentPositions = new Set(Object.keys(engine.positions));
 
   // ── 1. New Entries ─────────────────────────────────────────────
@@ -474,6 +475,13 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     if (isDryRun) {
       log.signal(`DRY RUN: ${pos.side === 'short' ? 'SHORT' : 'BUY'} ${assetId}`, { qty: pos.qty, entry: pos.entry });
       notifyBuy(assetId, pos.qty, pos.entry, pos.sl, pos.tp, 0); // notify even in dry run
+      continue;
+    }
+
+    // DRY_RUN_SHORTS: paper-trade short signals without real futures orders
+    if (isDryRunShorts && pos.side === 'short') {
+      log.signal(`DRY RUN SHORT: ${assetId}`, { qty: pos.qty, entry: pos.entry, sl: pos.sl, tp: pos.tp });
+      notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
       continue;
     }
 
@@ -537,10 +545,14 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
 
     if (!isDryRun) {
       if (pos.side === 'short') {
-        try {
-          await futures.closeShort(assetId, partialQty);
-        } catch (err) {
-          log.error(`Futures partial cover failed for ${assetId}`, { err: err.message });
+        if (!isDryRunShorts) {
+          try {
+            await futures.closeShort(assetId, partialQty);
+          } catch (err) {
+            log.error(`Futures partial cover failed for ${assetId}`, { err: err.message });
+          }
+        } else {
+          log.signal(`DRY RUN SHORT PARTIAL: ${assetId}`, { qty: partialQty, price });
         }
       } else {
         await orders.closePosition(assetId, partialQty, price, 'PARTIAL');
@@ -572,13 +584,18 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     }
 
     if (exitTrade.side === 'COVER') {
-      log.signal(`REAL ORDER: COVER ${assetId}`, { qty: closeQty, reason });
-      try {
-        await futures.closeShort(assetId, closeQty);
-        notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
-      } catch (err) {
-        log.error(`Futures cover failed for ${assetId}`, { err: err.message });
-        notifyError(`COVER ${assetId} gefaald: ${err.message}`);
+      if (isDryRunShorts) {
+        log.signal(`DRY RUN SHORT EXIT: ${assetId}`, { qty: closeQty, reason, pnl: exitTrade.pnl });
+        notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, `DRY ${reason}`);
+      } else {
+        log.signal(`REAL ORDER: COVER ${assetId}`, { qty: closeQty, reason });
+        try {
+          await futures.closeShort(assetId, closeQty);
+          notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
+        } catch (err) {
+          log.error(`Futures cover failed for ${assetId}`, { err: err.message });
+          notifyError(`COVER ${assetId} gefaald: ${err.message}`);
+        }
       }
     } else {
       log.signal(`REAL ORDER: SELL ${assetId}`, { qty: closeQty, reason });
