@@ -74,6 +74,23 @@ export function notifyError(msg) {
   send(`⚠️ <b>Bot fout</b>\n${msg}`);
 }
 
+export function notifyFuturesReady({ signalCount, winRate, exitCount }) {
+  send(
+    `🚀 <b>FUTURES KLAAR VOOR LIVE TRADING!</b>\n\n` +
+    `De bot heeft de DRY RUN shorts validatie succesvol doorstaan:\n\n` +
+    `✅ ${signalCount} paper short signalen gegenereerd\n` +
+    `✅ ${winRate.toFixed(1)}% win rate (${exitCount} afgesloten trades)\n` +
+    `✅ 7 dagen geen crashes of fouten\n\n` +
+    `<b>Wat je nu moet doen:</b>\n` +
+    `1️⃣ Stort geld op je Kraken Futures account\n` +
+    `2️⃣ Ga naar Render → Environment\n` +
+    `3️⃣ Zet <code>DRY_RUN_SHORTS=false</code>\n` +
+    `4️⃣ Zet <code>ENABLE_SHORTS=true</code>\n` +
+    `5️⃣ Sla op en herstart\n\n` +
+    `De bot kan dan automatisch short gaan bij een dalende markt. 📉💰`
+  );
+}
+
 // ── AI Chat System ─────────────────────────────────────────────
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;

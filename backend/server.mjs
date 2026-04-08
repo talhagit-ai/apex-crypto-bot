@@ -21,7 +21,7 @@ import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams, loadParamsSync } from './optimizer.mjs';
 import { KrakenFuturesClient, FUTURES_SYMBOL } from './kraken-futures-client.mjs';
-import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
+import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, notifyFuturesReady, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -41,6 +41,17 @@ let lastFallbackCheck = Date.now(); // for fallback tick timer
 
 // Real Kraken balances (refreshed every 60s)
 let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
+
+// Futures readiness tracking
+let lastErrorTime      = null;   // null = no errors since deploy
+let futuresReadyNotified = false; // prevent duplicate messages
+const DEPLOY_TIME      = Date.now(); // used to measure 7 error-free days
+
+// Wrapper: track errors + notify Telegram
+function reportError(msg) {
+  lastErrorTime = Date.now();
+  notifyError(msg);
+}
 
 // Kraken asset name → our asset id mapping
 const KRAKEN_ASSET_MAP = {
@@ -430,10 +441,11 @@ async function runEngineTick() {
   const state  = getFullState(prices);
   broadcast('state', state);
 
-  // Save equity snapshot every 12 ticks (= 1 hour)
+  // Save equity snapshot + check futures readiness every 12 ticks (= 1 hour)
   if (tickCount % 12 === 0) {
     const unrealized = state.equity - state.cash;
     saveEquitySnapshot(state.equity, state.cash, unrealized).catch(() => {});
+    checkFuturesReadiness();
   }
 
   // Save engine state after every tick (survive restarts)
@@ -491,7 +503,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       if (realBalances.futuresUSD !== null && realBalances.futuresUSD < marginNeeded * 1.2) {
         log.warn(`SKIP SHORT ${assetId}: insufficient futures margin ($${realBalances.futuresUSD?.toFixed(2)} < $${(marginNeeded*1.2).toFixed(2)})`);
         _rollbackPosition(assetId, pos);
-        notifyError(`SHORT ${assetId} overgeslagen: onvoldoende futures marge`);
+        reportError(`SHORT ${assetId} overgeslagen: onvoldoende futures marge`);
         continue;
       }
       // Pre-flight: check futures symbol exists
@@ -508,7 +520,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       } catch (err) {
         log.error(`Futures short FAILED — rolling back ${assetId}`, { err: err.message });
         _rollbackPosition(assetId, pos);
-        notifyError(`SHORT ${assetId} gefaald: ${err.message}`);
+        reportError(`SHORT ${assetId} gefaald: ${err.message}`);
       }
     } else {
       log.signal(`REAL ORDER: BUY ${assetId}`, { qty: pos.qty, entry: pos.entry });
@@ -524,7 +536,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       } else {
         log.error(`Spot BUY FAILED — rolling back ${assetId}`);
         _rollbackPosition(assetId, pos);
-        notifyError(`BUY ${assetId} gefaald — positie teruggedraaid`);
+        reportError(`BUY ${assetId} gefaald — positie teruggedraaid`);
       }
     }
   }
@@ -594,7 +606,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
           notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
         } catch (err) {
           log.error(`Futures cover failed for ${assetId}`, { err: err.message });
-          notifyError(`COVER ${assetId} gefaald: ${err.message}`);
+          reportError(`COVER ${assetId} gefaald: ${err.message}`);
         }
       }
     } else {
@@ -602,6 +614,41 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       const result = await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
       notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
     }
+  }
+}
+
+/**
+ * Check if DRY_RUN_SHORTS has produced enough validated data to go live.
+ * Sends one Telegram message when all criteria are met; never sends again.
+ */
+function checkFuturesReadiness() {
+  if (!DRY_RUN_SHORTS || futuresReadyNotified) return;
+
+  // Count paper short entries and exits in engine trade history
+  const shortEntries = engine.trades.filter(t => t.side === 'SHORT');
+  const shortExits   = engine.trades.filter(t => t.side === 'COVER');
+  const wins         = shortExits.filter(t => t.win);
+
+  const signalCount = shortEntries.length;
+  const exitCount   = shortExits.length;
+  const winRate     = exitCount >= 5 ? (wins.length / exitCount) * 100 : 0;
+
+  // 7 error-free days: either no errors at all, or last error was >7 days ago
+  const SEVEN_DAYS    = 7 * 24 * 60 * 60 * 1000;
+  const errorFreeDays = lastErrorTime === null
+    ? (Date.now() - DEPLOY_TIME) / (24 * 60 * 60 * 1000)
+    : (Date.now() - lastErrorTime) / (24 * 60 * 60 * 1000);
+  const noRecentErrors = errorFreeDays >= 7;
+
+  log.info('Futures readiness check', {
+    signals: signalCount, exits: exitCount, winRate: +winRate.toFixed(1),
+    errorFreeDays: +errorFreeDays.toFixed(1), noRecentErrors,
+  });
+
+  if (signalCount >= 50 && winRate >= 40 && exitCount >= 10 && noRecentErrors) {
+    futuresReadyNotified = true;
+    notifyFuturesReady({ signalCount, winRate, exitCount });
+    log.info('FUTURES READINESS CRITERIA MET — notification sent');
   }
 }
 
@@ -624,7 +671,7 @@ async function reconcilePositions() {
       if (!krakenHoldings[assetId] || krakenHoldings[assetId] < pos.qty * 0.5) {
         log.warn(`RECONCILE: Engine has LONG ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
         _rollbackPosition(assetId, pos);
-        notifyError(`Phantom LONG ${assetId} verwijderd (niet op Kraken)`);
+        reportError(`Phantom LONG ${assetId} verwijderd (niet op Kraken)`);
       }
     }
 
@@ -645,7 +692,7 @@ async function reconcilePositions() {
           if (!futuresMap[assetId]) {
             log.warn(`RECONCILE: Engine has SHORT ${assetId} but Kraken Futures has no position — removing phantom`);
             _rollbackPosition(assetId, pos);
-            notifyError(`Phantom SHORT ${assetId} verwijderd (niet op Kraken Futures)`);
+            reportError(`Phantom SHORT ${assetId} verwijderd (niet op Kraken Futures)`);
           }
         }
 
@@ -653,7 +700,7 @@ async function reconcilePositions() {
         for (const [assetId, fp] of Object.entries(futuresMap)) {
           if (!engine.positions[assetId]) {
             log.warn(`RECONCILE: Kraken Futures has ${assetId} position but engine doesn't — orphan`);
-            notifyError(`Wees-positie op Kraken Futures: ${assetId}. Handmatig sluiten!`);
+            reportError(`Wees-positie op Kraken Futures: ${assetId}. Handmatig sluiten!`);
           }
         }
       } catch (e) {
