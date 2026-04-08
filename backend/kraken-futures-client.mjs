@@ -199,10 +199,10 @@ export class KrakenFuturesClient {
       try {
         const data = await this._request('GET', '/orders/status', { orderIds: orderId }, 1);
         const order = data.orders?.[0];
-        if (order?.status === 'filled' || order?.status === 'partiallyFilled') {
-          return { price: parseFloat(order.lastPrice || order.limitPrice || 0) };
+        if (order?.status === 'filled') {
+          return { price: parseFloat(order.lastPrice || order.avgPrice || order.limitPrice || 0) };
         }
-        if (['cancelled', 'ioc_expired', 'rejected'].includes(order?.status)) {
+        if (['cancelled', 'ioc_expired', 'rejected', 'partiallyFilled'].includes(order?.status)) {
           return null;
         }
       } catch (_) { /* poll errors ignored */ }

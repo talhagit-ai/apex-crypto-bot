@@ -104,7 +104,13 @@ export async function loadState(key) {
   if (!db) return null;
   const result = await db.execute({ sql: 'SELECT value FROM state WHERE key = ?', args: [key] });
   const row = result.rows[0];
-  return row ? JSON.parse(row.value) : null;
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value);
+  } catch (e) {
+    log.error(`Corrupted state for key "${key}" — ignoring`, { err: e.message });
+    return null;
+  }
 }
 
 export async function getRecentTrades(limit = 100) {

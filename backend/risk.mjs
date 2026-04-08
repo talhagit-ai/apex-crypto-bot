@@ -63,10 +63,10 @@ export function checkPeriodReset(state) {
   state.dailyLossLog = state.dailyLossLog.filter(e => now - e.timestamp < DAY_MS);
   const newDailyLoss = state.dailyLossLog.reduce((s, e) => s + e.pnl, 0);
 
-  // Restore risk if daily loss recovered
-  if (state.dailyLoss > 0 && newDailyLoss < state.dailyLoss) {
-    state.riskReduction = Math.max(state.riskReduction, 1.0);
-    log.info('Daily loss window pruned — risk restored');
+  // Restore risk if daily loss window fully cleared (not if weekly still active)
+  if (state.dailyLoss > 0 && newDailyLoss === 0 && state.weeklyLoss < state.startCapital * WEEKLY_LOSS_LIMIT_1) {
+    state.riskReduction = 1.0;
+    log.info('Daily loss window cleared — risk fully restored');
   }
   state.dailyLoss = newDailyLoss;
 

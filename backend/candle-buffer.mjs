@@ -129,8 +129,6 @@ export class CandleBuffer {
 
       for (const k of sorted) {
         bars.timestamps.push(Number(k[0]));
-        bars.opens  = bars.opens || [];
-        bars.opens.push(Number(k[1]));
         bars.highs.push(Number(k[2]));
         bars.lows.push(Number(k[3]));
         bars.closes.push(Number(k[4]));
