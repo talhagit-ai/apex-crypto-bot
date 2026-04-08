@@ -3,7 +3,7 @@
 //  Long + Short signals, 6-factor confirmation, multi-TF regime
 // ═══════════════════════════════════════════════════════════════
 
-import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence } from './indicators.mjs';
+import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence, detectBreakout } from './indicators.mjs';
 import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX } from './config.mjs';
 
 // ── Regime Filters ─────────────────────────────────────────────
@@ -108,14 +108,17 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (volRegime === 'volatile' || volRegime === 'ranging') return null;
 
   // ADX must be rising over 6 bars (30 min, with 5% tolerance)
-  const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
-  if (ADX < ADX_prev * 0.95) return null;
+  // Skip this check when buffer is small (< 120 bars) — ADX is noisy on startup
+  if (closes.length > 120) {
+    const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
+    if (ADX < ADX_prev * 0.95) return null;
+  }
 
   // Price must be above EMA50 (confirms bullish bias, symmetric with short's cur < e50)
   if (cur < e50[n]) return null;
 
   // Multi-TF: reject if regime (1H) close below 1H EMA8
-  if (regimeData && regimeData.closes.length >= 10) {
+  if (regimeData && regimeData.closes.length >= 50) {
     const re8 = ema(regimeData.closes, 8);
     const rn  = regimeData.closes.length - 1;
     if (regimeData.closes[rn] < re8[rn]) return null;
@@ -129,7 +132,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const f2 = cur > VWAP;                           // Above VWAP
   const f3 = RSI > 42 && RSI < 68;                 // RSI sweet spot
   const f4 = MH > MH1;                             // MACD rising
-  const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
+  const f5 = VR >= 1.05;                            // Volume above average (lowered for Kraken liquidity)
   const f6 = RSI > RSI2 && RSI2 > RSI3;           // RSI accelerating up
 
   // Weighted quality score (max = FACTOR_WEIGHT_MAX ≈ 5.0)
@@ -141,17 +144,23 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (bullDiv) qualityScore += 0.5;
   if (bearDiv) qualityScore -= 0.3; // bearish div weakens long signal
 
+  // Breakout bonus: consolidation → breakout = high-probability entry
+  const breakout = detectBreakout(closes, highs, lows);
+  if (breakout.breakout && breakout.direction === 'bull') {
+    qualityScore += 0.8 * breakout.strength; // up to +0.8
+  }
+
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6); // normalized 0-6
 
   const minConf = opts.MIN_CONF ?? MIN_CONF;
   if (conf < minConf) return null;
-  if (RSI > 68) return null; // don't chase
 
   // ATR percentile for dynamic TP + volatility-adjusted sizing
   const atrPctile = atrPercentile(highs, lows, closes);
 
-  // Dynamic TP: tighter in low vol, wider in high vol
+  // Dynamic TP: tighter in low vol, wider in high vol. Breakouts get wider TP.
   let dynTpM = asset.tpM;
+  if (breakout.breakout) dynTpM *= 1.20; // breakouts run further
   if (atrPctile < 30) dynTpM *= 0.80;
   else if (atrPctile > 70) dynTpM *= 1.15;
 
@@ -221,11 +230,13 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (volRegime === 'volatile' || volRegime === 'ranging') return null;
 
   // ADX must be rising over 6 bars (30 min, with 5% tolerance)
-  const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
-  if (ADX < ADX_prev * 0.95) return null;
+  if (closes.length > 120) {
+    const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
+    if (ADX < ADX_prev * 0.95) return null;
+  }
 
   // Multi-TF: reject if regime (1H) close above 1H EMA8
-  if (regimeData && regimeData.closes.length >= 10) {
+  if (regimeData && regimeData.closes.length >= 50) {
     const re8 = ema(regimeData.closes, 8);
     const rn  = regimeData.closes.length - 1;
     if (regimeData.closes[rn] > re8[rn]) return null;
@@ -240,7 +251,7 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const f2 = cur < VWAP;                           // Below VWAP
   const f3 = RSI > 32 && RSI < 58;                 // RSI sweet spot (symmetric with long 42-68)
   const f4 = MH < MH1;                             // MACD falling
-  const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
+  const f5 = VR >= 1.05;                            // Volume above average (lowered for Kraken liquidity)
   const f6 = RSI < RSI2 && RSI2 < RSI3;           // RSI accelerating down
 
   // Weighted quality score
@@ -252,16 +263,22 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (bearDiv) qualityScore += 0.5;
   if (bullDiv) qualityScore -= 0.3; // bullish div weakens short signal
 
+  // Breakout bonus: bearish breakout = high-probability short entry
+  const breakout = detectBreakout(closes, highs, lows);
+  if (breakout.breakout && breakout.direction === 'bear') {
+    qualityScore += 0.8 * breakout.strength;
+  }
+
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6);
 
   const minConf = opts.MIN_CONF ?? MIN_CONF;
   if (conf < minConf) return null;
-  if (RSI < 32) return null; // don't chase oversold
 
   const atrPctile = atrPercentile(highs, lows, closes);
 
   // Dynamic TP
   let dynTpM = asset.tpM;
+  if (breakout.breakout) dynTpM *= 1.20; // breakouts run further
   if (atrPctile < 30) dynTpM *= 0.80;
   else if (atrPctile > 70) dynTpM *= 1.15;
 

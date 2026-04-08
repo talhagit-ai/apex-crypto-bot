@@ -49,6 +49,29 @@ export async function initDB() {
   `);
 
   await db.execute(`
+    CREATE TABLE IF NOT EXISTS trade_analytics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      asset TEXT NOT NULL,
+      side TEXT NOT NULL,
+      entry_price REAL,
+      exit_price REAL,
+      pnl REAL,
+      r_multiple REAL,
+      entry_hour_utc INTEGER,
+      regime TEXT,
+      vol_regime TEXT,
+      conf INTEGER,
+      quality_score REAL,
+      factors TEXT,
+      atr_percentile REAL,
+      hold_bars INTEGER,
+      exit_reason TEXT,
+      paper_only INTEGER DEFAULT 0,
+      timestamp INTEGER NOT NULL
+    )
+  `);
+
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS state (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -169,6 +192,35 @@ export async function getEquityHistory(limit = 500) {
   }));
 }
 
+// ── Trade Analytics (Self-Learning) ───────────────────────────
+
+export async function saveTradeAnalytics(data) {
+  if (!db) return;
+  await db.execute({
+    sql: `INSERT INTO trade_analytics (asset, side, entry_price, exit_price, pnl, r_multiple,
+      entry_hour_utc, regime, vol_regime, conf, quality_score, factors, atr_percentile,
+      hold_bars, exit_reason, paper_only, timestamp) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [
+      data.asset, data.side, data.entryPrice, data.exitPrice, data.pnl, data.rMultiple,
+      data.entryHourUTC, data.regime, data.volRegime, data.conf, data.qualityScore,
+      data.factors ? JSON.stringify(data.factors) : null, data.atrPercentile,
+      data.holdBars, data.exitReason, data.paperOnly ? 1 : 0, Date.now(),
+    ],
+  });
+}
+
+export async function getTradeAnalytics(limit = 500) {
+  if (!db) return [];
+  const result = await db.execute({
+    sql: 'SELECT * FROM trade_analytics ORDER BY id DESC LIMIT ?',
+    args: [limit],
+  });
+  return result.rows.map(r => ({
+    ...r,
+    factors: r.factors ? JSON.parse(r.factors) : null,
+  }));
+}
+
 // ── Engine State Persistence (Phase 1) ────────────────────────
 
 export async function saveEngineState(state) {
@@ -178,8 +230,8 @@ export async function saveEngineState(state) {
 export async function loadEngineState() {
   const state = await loadState('engine_state');
   if (!state) return null;
-  // Only restore if saved within last 30 minutes
-  if (Date.now() - (state.savedAt || 0) > 30 * 60 * 1000) return null;
+  // Only restore if saved within last 24 hours (Render can restart anytime)
+  if (Date.now() - (state.savedAt || 0) > 24 * 60 * 60 * 1000) return null;
   return state;
 }
 

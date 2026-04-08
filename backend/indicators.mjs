@@ -215,11 +215,10 @@ export function detectDivergence(closes, n = 14, lookback = 20) {
 export function atrPercentile(highs, lows, closes, n = 14, lookback = 50) {
   if (closes.length < n + lookback) return 50; // default if not enough data
   const atrs = [];
-  for (let i = n + 1; i <= lookback; i++) {
-    const end = closes.length - lookback + i;
+  for (let i = 0; i < lookback; i++) {
+    const end = closes.length - lookback + i + 1;
     if (end < n + 1) continue;
-    const h = highs.slice(0, end), l = lows.slice(0, end), c = closes.slice(0, end);
-    atrs.push(calcATR(h, l, c, n));
+    atrs.push(calcATR(highs.slice(0, end), lows.slice(0, end), closes.slice(0, end), n));
   }
   const current = calcATR(highs, lows, closes, n);
   const rank = atrs.filter(a => a <= current).length / (atrs.length || 1);
@@ -241,8 +240,49 @@ export function volatilityRegime(closes, highs, lows, lookback = 50) {
   const efficiency = netMove / (totalMove || 1e-9);
   const atrPct = calcATR(highs, lows, closes, 14) / (closes[n - 1] || 1);
 
-  if (efficiency > 0.35 && atrPct < 0.015) return 'clean_trend';
-  if (efficiency > 0.25) return 'trending';
-  if (atrPct > 0.025) return 'volatile';
+  if (efficiency > 0.35 && atrPct < 0.030) return 'clean_trend';  // Crypto: ATR < 3%
+  if (efficiency > 0.20) return 'trending';                       // Crypto: lower bar (was 0.25)
+  if (atrPct > 0.045) return 'volatile';                          // Crypto: ATR > 4.5% (was 2.5%)
   return 'ranging';
+}
+
+/**
+ * Breakout Detection — identifies consolidation → breakout patterns
+ * Consolidation: price range narrows (ATR decreasing), then suddenly expands.
+ * Returns: { breakout: boolean, direction: 'bull'|'bear'|null, strength: 0-1 }
+ */
+export function detectBreakout(closes, highs, lows, lookback = 20) {
+  if (closes.length < lookback + 5) return { breakout: false, direction: null, strength: 0 };
+  const n = closes.length;
+
+  // Measure range contraction over lookback window
+  const recentHigh = Math.max(...highs.slice(n - lookback, n - 2));
+  const recentLow  = Math.min(...lows.slice(n - lookback, n - 2));
+  const consolidationRange = recentHigh - recentLow;
+
+  // Current bar's move relative to the consolidation range
+  const cur = closes[n - 1];
+  const prev = closes[n - 2];
+  const barMove = Math.abs(cur - prev);
+  const avgBarMove = closes.slice(n - lookback, n - 1)
+    .reduce((sum, c, i, arr) => i > 0 ? sum + Math.abs(c - arr[i - 1]) : sum, 0) / (lookback - 1);
+
+  // ATR contraction: compare recent ATR to older ATR
+  const recentATR = calcATR(highs.slice(-10), lows.slice(-10), closes.slice(-10), 5);
+  const olderATR  = calcATR(highs.slice(-lookback, -10), lows.slice(-lookback, -10), closes.slice(-lookback, -10), 5);
+  const atrContracting = recentATR < olderATR * 0.75; // ATR shrank 25%+
+
+  // Breakout: price breaks outside consolidation range with above-average move
+  const bullBreak = cur > recentHigh && barMove > avgBarMove * 1.5;
+  const bearBreak = cur < recentLow  && barMove > avgBarMove * 1.5;
+
+  if (!atrContracting && !bullBreak && !bearBreak) {
+    return { breakout: false, direction: null, strength: 0 };
+  }
+
+  const strength = Math.min(1.0, barMove / (consolidationRange || 1));
+
+  if (bullBreak) return { breakout: true, direction: 'bull', strength };
+  if (bearBreak) return { breakout: true, direction: 'bear', strength };
+  return { breakout: false, direction: null, strength: 0 };
 }

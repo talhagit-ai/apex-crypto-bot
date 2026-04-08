@@ -31,7 +31,7 @@ export const MAX_POS    = 5;          // Max concurrent positions — verhoog me
 export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
 
 // ── Signal Requirements ────────────────────────────────────────
-export const MIN_CONF   = 4;          // Min 4 of 6 factors confirmed (hogere kwaliteit)
+export const MIN_CONF   = 3;          // Min 3/6 — quality score + CONF_RISK[3]=0.6% protects small trades
 export const MIN_RR     = 2.0;        // Min risk/reward ratio
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
@@ -175,7 +175,7 @@ export const ASSETS = [
     vol: 0.014,
     drift: 0.00038,
     slM: 1.5,
-    tpM: 3.4,
+    tpM: 3.8,  // Was 3.4 → low vol: 3.8×0.80=3.04/1.5=2.03 > MIN_RR(2.0)
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,

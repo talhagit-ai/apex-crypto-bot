@@ -166,7 +166,8 @@ export class KrakenClient extends EventEmitter {
       const delay = Math.min(60000, 5000 * Math.pow(2, this._reconnectAttempts - 1));
       log.info(`Kraken WebSocket closed — reconnecting in ${delay / 1000}s (attempt ${this._reconnectAttempts})`);
       if (this._reconnectAttempts >= 10) {
-        this.emit('error', { msg: 'WebSocket: 10 consecutive reconnect failures' });
+        this.emit('error', { msg: 'WebSocket: 10 consecutive reconnect failures — stopping reconnect' });
+        return; // Stop reconnecting — server should handle restart
       }
       setTimeout(() => this.connectWebSocket(onBarClose), delay);
     });

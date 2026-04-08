@@ -69,8 +69,8 @@ export class CandleBuffer {
         log.warn(`SPIKE REJECTED: ${assetId} [${interval}m] ${lastClose}→${candle.close}`);
         return;
       }
-      if (candle.volume <= 0) return; // skip zero-volume (exchange gap)
-      if (candle.high < candle.low) return; // impossible candle
+      if (candle.volume <= 0) { log.warn(`ZERO VOL skipped: ${assetId} [${interval}m]`); return; }
+      if (candle.high < candle.low) { log.warn(`BAD CANDLE skipped: ${assetId} [${interval}m] H=${candle.high} L=${candle.low}`); return; }
     }
 
     buf.closes.push(candle.close);

@@ -22,6 +22,7 @@ import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams, loadParamsSync } from './optimizer.mjs';
 import { KrakenFuturesClient, FUTURES_SYMBOL } from './kraken-futures-client.mjs';
 import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, notifyFuturesReady, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
+import { LearningEngine } from './learning.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -31,7 +32,8 @@ const buffer  = new CandleBuffer(kraken);
 const orders  = new OrderManager(kraken);
 
 // Engine + DB initialized async in start()
-let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS });
+const learningEngine = new LearningEngine();
+let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, learningEngine });
 
 let wsClients = new Set();
 let tickCount  = 0;
@@ -233,11 +235,12 @@ app.post('/telegram-webhook', (req, res) => {
   handleWebhookUpdate(req.body).catch(() => {});
 });
 
-// REST: performance dashboard
+// REST: performance dashboard + learning insights
 app.get('/api/performance', async (_req, res) => {
   try {
     const metrics = await getPerformanceMetrics();
-    res.json(metrics);
+    const insights = learningEngine.getInsights();
+    res.json({ ...metrics, learning: insights });
   } catch (e) { res.json({ error: e.message }); }
 });
 
@@ -453,6 +456,9 @@ async function runEngineTick() {
   const state  = getFullState(prices);
   broadcast('state', state);
 
+  // Refresh learning engine (auto-throttles to every 5 min)
+  learningEngine.refresh().catch(() => {});
+
   // Save equity snapshot + check futures readiness every 12 ticks (= 1 hour)
   if (tickCount % 12 === 0) {
     const unrealized = state.equity - state.cash;
@@ -508,6 +514,9 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       log.signal(`DRY RUN SHORT: ${assetId}`, { qty: pos.qty, entry: pos.entry, sl: pos.sl, tp: pos.tp });
       notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
       pos.paperOnly = true; // flag: engine tracks it, no real futures order placed
+      // Return margin — paper shorts don't use real money, don't affect spot sizing
+      engine.cash += pos.margin || 0;
+      pos.margin = 0;
       continue;
     }
 
@@ -620,12 +629,12 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     if (exitTrade.side === 'COVER') {
       if (isDryRunShorts) {
         log.signal(`DRY RUN SHORT EXIT: ${assetId}`, { qty: closeQty, reason, pnl: exitTrade.pnl });
-        notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, `DRY ${reason}`);
+        notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, `DRY ${reason}`, 'COVER');
       } else {
         log.signal(`REAL ORDER: COVER ${assetId}`, { qty: closeQty, reason });
         try {
           await futures.closeShort(assetId, closeQty);
-          notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason);
+          notifySell(assetId, closeQty, exitTrade.price, exitTrade.pnl || 0, reason, 'COVER');
         } catch (err) {
           log.error(`Futures cover failed for ${assetId}`, { err: err.message });
           reportError(`COVER ${assetId} gefaald: ${err.message}`);
@@ -763,7 +772,7 @@ async function start() {
   // Load optimizer params from DB (overrides defaults)
   const savedParams = await loadParams();
   if (savedParams._meta) {
-    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS });
+    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, learningEngine });
     log.info('Loaded optimizer params from DB', savedParams._meta);
   }
 
@@ -857,7 +866,7 @@ async function start() {
   });
 
   log.info('Bot is running. Waiting for bar closes...');
-  notifyStartup(CAPITAL, ASSETS.length);
+  notifyStartup(realBalances.spotUSD || engine.capital || CAPITAL, ASSETS.length);
 
   // Start Telegram AI chat (webhook mode — no polling conflicts)
   const publicUrl = process.env.PUBLIC_URL || `https://apex-crypto-bot-c3bt.onrender.com`;

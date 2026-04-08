@@ -42,11 +42,12 @@ export function notifyShort(assetId, qty, price, sl, tp, conf) {
   );
 }
 
-export function notifySell(assetId, qty, price, pnl, reason) {
+export function notifySell(assetId, qty, price, pnl, reason, side = 'SELL') {
   const emoji  = pnl >= 0 ? '💰' : '🛑';
   const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+  const label  = side === 'COVER' ? 'CLOSE SHORT' : 'CLOSE LONG';
   send(
-    `${emoji} <b>SELL ${assetId}</b> — ${reason}\n` +
+    `${emoji} <b>${label} ${assetId}</b> — ${reason}\n` +
     `Prijs: $${price.toFixed(4)}\n` +
     `PnL: <b>${pnlStr}</b>`
   );

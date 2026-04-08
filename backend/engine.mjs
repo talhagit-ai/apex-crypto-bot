@@ -13,6 +13,7 @@ import { calcATR } from './indicators.mjs';
 import { checkRegime, checkBearishRegime, generateSignal, generateShortSignal } from './signal.mjs';
 import { createRiskState, checkPeriodReset, canOpenPosition, calculatePositionSize, recordTradeResult } from './risk.mjs';
 import { log } from './logger.mjs';
+import { saveTradeAnalytics } from './persistence.mjs';
 
 /**
  * Trading Engine — manages positions, signals, and exits
@@ -28,6 +29,7 @@ export class TradingEngine {
     this.regimes = {};
     this.opts = opts;            // { simMode: true } disables time-based features
     this.simTime = Date.now();   // Simulated clock (advanced 5min per tick in simMode)
+    this.learningEngine = opts.learningEngine || null; // Self-learning engine
 
     // Overrideable params (set by optimizer or live param load)
     const p = opts.overrideParams || {};
@@ -124,7 +126,9 @@ export class TradingEngine {
           const pnl = isShort
             ? pqty * (pos.entry - cur)
             : pqty * (cur - pos.entry);
-          if (isShort) {
+          if (pos.paperOnly) {
+            // Paper short: no cash changes
+          } else if (isShort) {
             const marginReturn = (pos.margin || 0) * (pqty / pos.qty);
             this.cash += marginReturn + pqty * (pos.entry - cur);
             pos.margin = (pos.margin || 0) - marginReturn;
@@ -156,7 +160,9 @@ export class TradingEngine {
           const pnl = isShort
             ? pqty * (pos.entry - cur)
             : pqty * (cur - pos.entry);
-          if (isShort) {
+          if (pos.paperOnly) {
+            // Paper short: no cash changes
+          } else if (isShort) {
             const marginReturn = (pos.margin || 0) * (pqty / pos.qty);
             this.cash += marginReturn + pqty * (pos.entry - cur);
             pos.margin = (pos.margin || 0) - marginReturn;
@@ -260,16 +266,33 @@ export class TradingEngine {
         const bullRegime = checkRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         if (bullRegime) {
           const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd);
-          if (sig) candidates.push({ asset: assetCfg, sig });
-          else log.info(`Skip ${asset.id} LONG: signal rejected`);
+          if (sig) {
+            // Self-learning: adjust quality based on historical performance
+            if (this.learningEngine) {
+              const learnMult = this.learningEngine.scoreSignal(
+                asset.id, new Date().getUTCHours(), 'bull', sig.volRegime, sig.conf, sig.factors
+              );
+              sig.qualityScore *= learnMult;
+              sig.learnMult = +learnMult.toFixed(2);
+            }
+            candidates.push({ asset: assetCfg, sig });
+          }
         }
 
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         if (bearRegime && this.opts.enableShorts) {
           const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd);
-          if (sig) candidates.push({ asset: assetCfg, sig });
-          else log.info(`Skip ${asset.id} SHORT: signal rejected`);
+          if (sig) {
+            if (this.learningEngine) {
+              const learnMult = this.learningEngine.scoreSignal(
+                asset.id, new Date().getUTCHours(), 'bear', sig.volRegime, sig.conf, sig.factors
+              );
+              sig.qualityScore *= learnMult;
+              sig.learnMult = +learnMult.toFixed(2);
+            }
+            candidates.push({ asset: assetCfg, sig });
+          }
         }
 
         this.regimes[asset.id] = bullRegime ? 'bull' : bearRegime ? 'bear' : 'neutral';
@@ -333,6 +356,10 @@ export class TradingEngine {
           breakeven: false,
           margin: isShort ? cost * 0.10 : 0,
           conf: sig.conf,
+          qualityScore: sig.qualityScore,
+          factors: sig.factors,
+          atrPercentile: sig.atrPercentile,
+          volRegime: sig.volRegime,
         };
 
         openPositions.push({ assetId: asset.id });
@@ -364,7 +391,11 @@ export class TradingEngine {
     const isShort = pos.side === 'short';
     let pnl, cashReturn;
 
-    if (isShort) {
+    if (pos.paperOnly) {
+      // Paper short: track PnL for stats but don't change cash (no real money involved)
+      pnl = (pos.entry - price) * pos.qty;
+      cashReturn = 0;
+    } else if (isShort) {
       pnl = (pos.entry - price) * pos.qty;          // profit when price falls
       cashReturn = (pos.margin || 0) + pnl;          // return margin + profit/loss
     } else {
@@ -390,6 +421,16 @@ export class TradingEngine {
       age: pos.age,
       equity: +this.equity({ [id]: price }).toFixed(2),
     });
+
+    // Save enriched trade data for self-learning engine
+    saveTradeAnalytics({
+      asset: id, side: pos.side, entryPrice: pos.entry, exitPrice: price,
+      pnl, rMultiple: pnlR, entryHourUTC: new Date(Date.now() - pos.age * 5 * 60000).getUTCHours(),
+      regime: this.regimes[id] || 'neutral', volRegime: pos.volRegime || null,
+      conf: pos.conf || null, qualityScore: pos.qualityScore || null,
+      factors: pos.factors || null, atrPercentile: pos.atrPercentile || null,
+      holdBars: pos.age, exitReason: reason, paperOnly: !!pos.paperOnly,
+    }).catch(() => {});
 
     delete this.positions[id];
   }
@@ -453,8 +494,8 @@ export class TradingEngine {
         losses: closedTrades.length - wins.length,
       },
       risk: {
-        dailyLoss: +(this.riskState.dailyLoss / this.capital * 100).toFixed(1),
-        weeklyLoss: +(this.riskState.weeklyLoss / this.capital * 100).toFixed(1),
+        dailyLoss: +(this.riskState.dailyLoss / this.riskState.startCapital * 100).toFixed(1),
+        weeklyLoss: +(this.riskState.weeklyLoss / this.riskState.startCapital * 100).toFixed(1),
         riskReduction: this.riskState.riskReduction,
         killed: this.riskState.killed,
       },
