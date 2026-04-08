@@ -438,9 +438,9 @@ export class TradingEngine {
     return {
       equity: +eq.toFixed(2),
       cash: +this.cash.toFixed(2),
-      startCapital: this.capital,
-      pnl: +(eq - this.capital).toFixed(2),
-      returnPct: +((eq - this.capital) / this.capital * 100).toFixed(2),
+      startCapital: this.riskState.startCapital,
+      pnl: +(eq - this.riskState.startCapital).toFixed(2),
+      returnPct: +((eq - this.riskState.startCapital) / this.riskState.startCapital * 100).toFixed(2),
       assets: ASSETS.map(a => ({ id: a.id, color: a.color })),
       positions: { ...this.positions },
       trades: this.trades.slice(-100),
