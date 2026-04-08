@@ -423,14 +423,34 @@ export class TradingEngine {
     });
 
     // Save enriched trade data for self-learning engine
-    saveTradeAnalytics({
+    const entryHourUTC = new Date(Date.now() - pos.age * 5 * 60000).getUTCHours();
+    const analyticsData = {
       asset: id, side: pos.side, entryPrice: pos.entry, exitPrice: price,
-      pnl, rMultiple: pnlR, entryHourUTC: new Date(Date.now() - pos.age * 5 * 60000).getUTCHours(),
+      pnl, rMultiple: pnlR, entryHourUTC,
       regime: this.regimes[id] || 'neutral', volRegime: pos.volRegime || null,
       conf: pos.conf || null, qualityScore: pos.qualityScore || null,
       factors: pos.factors || null, atrPercentile: pos.atrPercentile || null,
       holdBars: pos.age, exitReason: reason, paperOnly: !!pos.paperOnly,
-    }).catch(() => {});
+    };
+    saveTradeAnalytics(analyticsData).catch(() => {});
+
+    // Real-time learning update — no need to wait for 5-min DB refresh
+    if (this.learningEngine) {
+      this.learningEngine.recordTrade({
+        asset:          analyticsData.asset,
+        side:           analyticsData.side,
+        pnl:            analyticsData.pnl,
+        r_multiple:     analyticsData.rMultiple,
+        entry_hour_utc: analyticsData.entryHourUTC,
+        regime:         analyticsData.regime,
+        vol_regime:     analyticsData.volRegime,
+        conf:           analyticsData.conf,
+        factors:        analyticsData.factors,
+        exit_reason:    analyticsData.exitReason,
+        paper_only:     analyticsData.paperOnly ? 1 : 0,
+        timestamp:      Date.now(),
+      });
+    }
 
     delete this.positions[id];
   }

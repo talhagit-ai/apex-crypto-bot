@@ -211,8 +211,9 @@ export async function saveTradeAnalytics(data) {
 
 export async function getTradeAnalytics(limit = 500) {
   if (!db) return [];
+  // ORDER BY id ASC (oldest first) — required for recency decay weighting in learning engine
   const result = await db.execute({
-    sql: 'SELECT * FROM trade_analytics ORDER BY id DESC LIMIT ?',
+    sql: 'SELECT * FROM (SELECT * FROM trade_analytics ORDER BY id DESC LIMIT ?) ORDER BY id ASC',
     args: [limit],
   });
   return result.rows.map(r => ({
