@@ -20,7 +20,7 @@ import { KrakenClient } from './kraken-client.mjs';
 import { CandleBuffer } from './candle-buffer.mjs';
 import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams, loadParamsSync } from './optimizer.mjs';
-import { KrakenFuturesClient } from './kraken-futures-client.mjs';
+import { KrakenFuturesClient, FUTURES_SYMBOL } from './kraken-futures-client.mjs';
 import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
 
 // ── Bootstrap ─────────────────────────────────────────────────
@@ -37,6 +37,7 @@ let wsClients = new Set();
 let tickCount  = 0;
 let lastTick5  = {};  // assetId → timestamp of last 5m bar
 let tickTimer  = null; // fires engine tick when not all assets close in time
+let lastFallbackCheck = Date.now(); // for fallback tick timer
 
 // Real Kraken balances (refreshed every 60s)
 let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
@@ -365,10 +366,11 @@ function onBarClose(assetId, interval, candle) {
 
   const timestamps = Object.values(lastTick5);
 
-  // If all assets reported, run immediately if within 90s window
+  // Fire immediately if 75%+ of assets reported within 30s window
   const minTs = Math.min(...timestamps);
   const maxTs = Math.max(...timestamps);
-  if (timestamps.length >= ASSETS.length && maxTs - minTs <= 90_000) {
+  const threshold = Math.ceil(ASSETS.length * 0.75);
+  if (timestamps.length >= threshold && maxTs - minTs <= 30_000) {
     clearTimeout(tickTimer);
     tickTimer = null;
     lastTick5 = {};
@@ -376,19 +378,23 @@ function onBarClose(assetId, interval, candle) {
     return;
   }
 
-  // Otherwise schedule a tick 90s after the first bar close this round
-  // (handles illiquid assets that never close)
+  // Fallback: 30s after first bar close (handles illiquid assets)
   if (!tickTimer) {
     tickTimer = setTimeout(() => {
       tickTimer = null;
       lastTick5 = {};
       runEngineTick();
-    }, 90_000);
+    }, 30_000);
   }
 }
 
 async function runEngineTick() {
+  if (!buffer.ready) {
+    log.warn('Engine tick skipped: buffer not ready');
+    return;
+  }
   tickCount++;
+  lastFallbackCheck = Date.now();
 
   // Build barData (5m) and regimeData (1h) from buffer
   const barData    = {};
@@ -472,9 +478,24 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     }
 
     if (pos.side === 'short') {
+      // Pre-flight: check futures margin
+      const marginNeeded = pos.qty * pos.entry * 0.10;
+      if (realBalances.futuresUSD !== null && realBalances.futuresUSD < marginNeeded * 1.2) {
+        log.warn(`SKIP SHORT ${assetId}: insufficient futures margin ($${realBalances.futuresUSD?.toFixed(2)} < $${(marginNeeded*1.2).toFixed(2)})`);
+        _rollbackPosition(assetId, pos);
+        notifyError(`SHORT ${assetId} overgeslagen: onvoldoende futures marge`);
+        continue;
+      }
+      // Pre-flight: check futures symbol exists
+      if (!futures.hasFuturesSymbol(assetId)) {
+        log.warn(`SKIP SHORT ${assetId}: no futures symbol mapping`);
+        _rollbackPosition(assetId, pos);
+        continue;
+      }
       log.signal(`REAL ORDER: SHORT ${assetId}`, { qty: pos.qty, entry: pos.entry });
       try {
-        await futures.openShort(assetId, pos.qty);
+        const fill = await futures.openShort(assetId, pos.qty);
+        if (fill?.fillPrice) { pos.entry = fill.fillPrice; pos.peak = fill.fillPrice; }
         notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
       } catch (err) {
         log.error(`Futures short FAILED — rolling back ${assetId}`, { err: err.message });
@@ -509,6 +530,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
 
     const partialQty = prevQty - currentQty;
     const pos = engine.positions[assetId];
+    if (!pos) continue; // Position was fully closed in same tick; handled in section 3
     const price = barData[assetId]?.closes?.slice(-1)[0] || pos.entry;
 
     log.signal(`REAL ORDER: PARTIAL SELL ${assetId}`, { qty: partialQty, price });
@@ -569,6 +591,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
 /** Reconcile engine positions vs real Kraken holdings every 5 minutes */
 async function reconcilePositions() {
   try {
+    // ── Spot reconciliation ──
     const raw = await kraken.api.balance();
     const krakenHoldings = {};
     for (const [k, v] of Object.entries(raw)) {
@@ -579,12 +602,45 @@ async function reconcilePositions() {
       }
     }
 
-    // Check each engine long position
     for (const [assetId, pos] of Object.entries(engine.positions)) {
-      if (pos.side === 'short') continue; // futures, not spot
+      if (pos.side === 'short') continue;
       if (!krakenHoldings[assetId] || krakenHoldings[assetId] < pos.qty * 0.5) {
-        log.warn(`RECONCILE: Engine has ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
+        log.warn(`RECONCILE: Engine has LONG ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
         _rollbackPosition(assetId, pos);
+        notifyError(`Phantom LONG ${assetId} verwijderd (niet op Kraken)`);
+      }
+    }
+
+    // ── Futures reconciliation ──
+    if (ENABLE_SHORTS && futures.enabled) {
+      try {
+        const openFutures = await futures.getPositions();
+        const futuresMap = {};
+        for (const fp of openFutures) {
+          const assetId = Object.entries(FUTURES_SYMBOL)
+            .find(([, sym]) => sym === fp.symbol)?.[0];
+          if (assetId) futuresMap[assetId] = fp;
+        }
+
+        // Detect phantom shorts (in engine but not on Kraken)
+        for (const [assetId, pos] of Object.entries(engine.positions)) {
+          if (pos.side !== 'short') continue;
+          if (!futuresMap[assetId]) {
+            log.warn(`RECONCILE: Engine has SHORT ${assetId} but Kraken Futures has no position — removing phantom`);
+            _rollbackPosition(assetId, pos);
+            notifyError(`Phantom SHORT ${assetId} verwijderd (niet op Kraken Futures)`);
+          }
+        }
+
+        // Detect orphaned futures (on Kraken but not in engine)
+        for (const [assetId, fp] of Object.entries(futuresMap)) {
+          if (!engine.positions[assetId]) {
+            log.warn(`RECONCILE: Kraken Futures has ${assetId} position but engine doesn't — orphan`);
+            notifyError(`Wees-positie op Kraken Futures: ${assetId}. Handmatig sluiten!`);
+          }
+        }
+      } catch (e) {
+        log.warn('Futures reconciliation failed', { err: e.message });
       }
     }
   } catch (e) {
@@ -654,6 +710,16 @@ async function start() {
 
   // 3. Connect Kraken WebSocket streams
   kraken.connectWebSocket(onBarClose);
+
+  // Fallback: if no tick in 6+ minutes, force tick from buffer data
+  setInterval(() => {
+    const elapsed = Date.now() - lastFallbackCheck;
+    if (elapsed > 6 * 60 * 1000 && buffer.ready && tickCount > 0) {
+      log.warn('No tick in 6 minutes — forcing engine tick');
+      lastFallbackCheck = Date.now();
+      runEngineTick();
+    }
+  }, 60_000);
 
   // 4. Start weekly optimizer schedule
   startOptimizationSchedule();

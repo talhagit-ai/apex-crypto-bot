@@ -79,9 +79,12 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   if (ADX < ADX_MIN) return null;
 
-  // ADX must be rising (trend strengthening, not weakening)
-  const ADX_prev = calcADX(highs.slice(0, -3), lows.slice(0, -3), closes.slice(0, -3), 14);
-  if (ADX < ADX_prev) return null;
+  // ADX must be rising over 6 bars (30 min, with 5% tolerance)
+  const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
+  if (ADX < ADX_prev * 0.95) return null;
+
+  // Price must be above EMA50 (confirms bullish bias, symmetric with short's cur < e50)
+  if (cur < e50[n]) return null;
 
   // Multi-TF: reject if regime (1H) close below 1H EMA8
   if (regimeData && regimeData.closes.length >= 10) {
@@ -92,7 +95,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   const f1 = e8[n] > e13[n] && e13[n] > e21[n];  // EMA stack bull
   const f2 = cur > VWAP;                           // Above VWAP
-  const f3 = RSI > 42 && RSI < 68;                 // RSI sweet spot (tighter)
+  const f3 = RSI > 42 && RSI < 68;                 // RSI sweet spot
   const f4 = MH > MH1;                             // MACD rising
   const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
   const f6 = RSI > RSI2 && RSI2 > RSI3;           // RSI accelerating up
@@ -161,9 +164,9 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   // Pre-filter: below EMA50 + trending
   if (ADX < ADX_MIN || cur > e50[n]) return null;
 
-  // ADX must be rising (trend strengthening)
-  const ADX_prev = calcADX(highs.slice(0, -3), lows.slice(0, -3), closes.slice(0, -3), 14);
-  if (ADX < ADX_prev) return null;
+  // ADX must be rising over 6 bars (30 min, with 5% tolerance)
+  const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
+  if (ADX < ADX_prev * 0.95) return null;
 
   // Multi-TF: reject if regime (1H) close above 1H EMA8
   if (regimeData && regimeData.closes.length >= 10) {
@@ -175,7 +178,7 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   // ── 6-Factor Bearish Confirmation ─────────────────────────
   const f1 = e8[n] < e13[n] && e13[n] < e21[n];  // EMA stack bear
   const f2 = cur < VWAP;                           // Below VWAP
-  const f3 = RSI > 32 && RSI < 56;                 // RSI sweet spot (tighter)
+  const f3 = RSI > 32 && RSI < 58;                 // RSI sweet spot (symmetric with long 42-68)
   const f4 = MH < MH1;                             // MACD falling
   const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
   const f6 = RSI < RSI2 && RSI2 < RSI3;           // RSI accelerating down

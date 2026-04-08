@@ -59,7 +59,8 @@ export function calcATR(highs, lows, closes, n = 14) {
 }
 
 /**
- * Average Directional Index (trend strength)
+ * Average Directional Index — Wilder's standard (trend strength)
+ * Uses proper Wilder smoothing for +DM, -DM, TR, and DX.
  * @param {number[]} highs
  * @param {number[]} lows
  * @param {number[]} closes
@@ -67,24 +68,61 @@ export function calcATR(highs, lows, closes, n = 14) {
  * @returns {number} ADX value 0-100
  */
 export function calcADX(highs, lows, closes, n = 14) {
-  if (closes.length < n + 2) return 15;
-  const s = Math.min(n * 2, closes.length);
-  let pdm = 0, ndm = 0, tr = 0;
-  for (let i = closes.length - s + 1; i < closes.length; i++) {
-    const up = highs[i] - highs[i - 1];
-    const dn = lows[i - 1] - lows[i];
-    if (up > dn && up > 0) pdm += up;
-    if (dn > up && dn > 0) ndm += dn;
-    tr += Math.max(
+  // Need at least 2*n+1 bars for a meaningful ADX
+  if (closes.length < n * 2 + 1) return 15;
+
+  // Step 1: Raw True Range, +DM, -DM for each bar
+  const rawTR = [], rawPDM = [], rawNDM = [];
+  for (let i = 1; i < closes.length; i++) {
+    rawTR.push(Math.max(
       highs[i] - lows[i],
       Math.abs(highs[i] - closes[i - 1]),
       Math.abs(lows[i] - closes[i - 1])
-    );
+    ));
+    const up = highs[i] - highs[i - 1];
+    const dn = lows[i - 1] - lows[i];
+    rawPDM.push(up > dn && up > 0 ? up : 0);
+    rawNDM.push(dn > up && dn > 0 ? dn : 0);
   }
-  const at = tr / s || 1e-9;
-  const pdi = 100 * pdm / s / at;
-  const ndi = 100 * ndm / s / at;
-  return 100 * Math.abs(pdi - ndi) / (pdi + ndi + 1e-9);
+
+  // Step 2: Wilder smooth over n periods (first = SMA, then Wilder)
+  const len = rawTR.length;
+  const start = len - n * 2; // use last 2*n bars for smoothing
+  if (start < 0) return 15;
+
+  // Initial SMA for first smoothed value
+  let sTR = 0, sPDM = 0, sNDM = 0;
+  for (let i = start; i < start + n; i++) {
+    sTR  += rawTR[i];
+    sPDM += rawPDM[i];
+    sNDM += rawNDM[i];
+  }
+
+  // Wilder smooth remaining bars
+  const dxValues = [];
+  for (let i = start + n; i < len; i++) {
+    sTR  = sTR  - sTR / n + rawTR[i];
+    sPDM = sPDM - sPDM / n + rawPDM[i];
+    sNDM = sNDM - sNDM / n + rawNDM[i];
+
+    const pdi = 100 * sPDM / (sTR || 1e-9);
+    const ndi = 100 * sNDM / (sTR || 1e-9);
+    const dx  = 100 * Math.abs(pdi - ndi) / ((pdi + ndi) || 1e-9);
+    dxValues.push(dx);
+  }
+
+  // Step 3: Smooth DX over n periods to get ADX
+  if (dxValues.length < n) return dxValues[dxValues.length - 1] || 15;
+
+  let adx = 0;
+  for (let i = 0; i < n; i++) adx += dxValues[i];
+  adx /= n; // initial SMA
+
+  for (let i = n; i < dxValues.length; i++) {
+    adx = (adx * (n - 1) + dxValues[i]) / n; // Wilder smooth
+  }
+
+  return adx;
 }
 
 /**

@@ -131,34 +131,27 @@ export class KrakenClient extends EventEmitter {
    * Connect to Kraken WebSocket v2 and subscribe to OHLC streams
    */
   connectWebSocket(onBarClose) {
-    // Build subscription list
     const symbols5m  = ASSETS.map(a => a.krakenSymbol || a.symbol);
     const symbols60m = ASSETS.map(a => a.krakenSymbol || a.symbol);
+
+    // Exponential backoff for reconnection
+    if (!this._reconnectAttempts) this._reconnectAttempts = 0;
 
     const wsUrl = 'wss://ws.kraken.com/v2';
     this.ws = new WebSocket(wsUrl);
 
     this.ws.on('open', () => {
+      this._reconnectAttempts = 0; // reset on success
       log.info('Kraken WebSocket connected');
 
-      // Subscribe to OHLC 5min
       this.ws.send(JSON.stringify({
         method: 'subscribe',
-        params: {
-          channel: 'ohlc',
-          symbol:  symbols5m,
-          interval: 5,
-        },
+        params: { channel: 'ohlc', symbol: symbols5m, interval: 5 },
       }));
 
-      // Subscribe to OHLC 60min
       this.ws.send(JSON.stringify({
         method: 'subscribe',
-        params: {
-          channel: 'ohlc',
-          symbol:  symbols60m,
-          interval: 60,
-        },
+        params: { channel: 'ohlc', symbol: symbols60m, interval: 60 },
       }));
 
       this.emit('ready');
@@ -169,8 +162,13 @@ export class KrakenClient extends EventEmitter {
     });
 
     this.ws.on('close', () => {
-      log.info('Kraken WebSocket closed — reconnecting in 5s');
-      setTimeout(() => this.connectWebSocket(onBarClose), 5000);
+      this._reconnectAttempts++;
+      const delay = Math.min(60000, 5000 * Math.pow(2, this._reconnectAttempts - 1));
+      log.info(`Kraken WebSocket closed — reconnecting in ${delay / 1000}s (attempt ${this._reconnectAttempts})`);
+      if (this._reconnectAttempts >= 10) {
+        this.emit('error', { msg: 'WebSocket: 10 consecutive reconnect failures' });
+      }
+      setTimeout(() => this.connectWebSocket(onBarClose), delay);
     });
 
     this.ws.on('error', (err) => {

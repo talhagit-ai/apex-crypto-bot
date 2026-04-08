@@ -58,6 +58,10 @@ export class CandleBuffer {
     const buf = this.buffers[assetId]?.[interval];
     if (!buf) return;
 
+    // Dedup: skip if timestamp is same or older than last bar
+    const lastTs = buf.timestamps[buf.timestamps.length - 1];
+    if (lastTs && candle.timestamp <= lastTs) return;
+
     buf.closes.push(candle.close);
     buf.highs.push(candle.high);
     buf.lows.push(candle.low);

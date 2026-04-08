@@ -59,9 +59,9 @@ export class TradingEngine {
     for (const [id, pos] of Object.entries(this.positions)) {
       const price = currentPrices[id] || pos.entry;
       if (pos.side === 'short') {
-        // Short: we received cash at entry, owe qty*price back
-        // Unrealized = qty*entry (already in cash) - qty*price (current liability)
-        unrealized += pos.qty * (pos.entry - price);
+        // Short: margin deducted from cash. Add back margin + unrealized P&L.
+        // When price=entry: equity = (cash-margin) + margin + 0 = cash ✓
+        unrealized += (pos.margin || 0) + pos.qty * (pos.entry - price);
       } else {
         unrealized += pos.qty * price;
       }
@@ -124,8 +124,15 @@ export class TradingEngine {
           const pnl = isShort
             ? pqty * (pos.entry - cur)
             : pqty * (cur - pos.entry);
-          this.cash += isShort ? pqty * (2 * pos.entry - cur) : pqty * cur;
+          if (isShort) {
+            const marginReturn = (pos.margin || 0) * (pqty / pos.qty);
+            this.cash += marginReturn + pqty * (pos.entry - cur);
+            pos.margin = (pos.margin || 0) - marginReturn;
+          } else {
+            this.cash += pqty * cur;
+          }
           pos.qty -= pqty;
+          pos.risk = pos.qty * Math.abs(pos.entry - pos.sl); // Update risk after partial
           pos.partial1Taken = true;
           this._logTrade(id, 'PARTIAL1', cur, pqty, pnl, this.P1_R, `Partial @ ${this.P1_R}R`);
 
@@ -147,8 +154,15 @@ export class TradingEngine {
           const pnl = isShort
             ? pqty * (pos.entry - cur)
             : pqty * (cur - pos.entry);
-          this.cash += isShort ? pqty * (2 * pos.entry - cur) : pqty * cur;
+          if (isShort) {
+            const marginReturn = (pos.margin || 0) * (pqty / pos.qty);
+            this.cash += marginReturn + pqty * (pos.entry - cur);
+            pos.margin = (pos.margin || 0) - marginReturn;
+          } else {
+            this.cash += pqty * cur;
+          }
           pos.qty -= pqty;
+          pos.risk = pos.qty * Math.abs(pos.entry - pos.sl); // Update risk after partial
           pos.partial2Taken = true;
           this._logTrade(id, 'PARTIAL2', cur, pqty, pnl, this.P2_R, `Partial @ ${this.P2_R}R`);
 
@@ -247,9 +261,10 @@ export class TradingEngine {
         if (qty <= 0) continue;
 
         const cost = qty * sig.price;
-        if (cost > availableCash * 0.88) continue;
-
         const isShort = sig.side === 'short';
+
+        // For longs: full notional must fit in cash. For shorts: margin check below.
+        if (!isShort && cost > availableCash * 0.88) continue;
         const slDist  = Math.abs(sig.price - sig.sl);
 
         // Long: deduct cost from cash. Short: futures margin (10% of notional)
