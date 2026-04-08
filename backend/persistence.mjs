@@ -183,6 +183,14 @@ export async function loadEngineState() {
   return state;
 }
 
+export async function saveFuturesReadiness(data) {
+  await saveState('futures_readiness', data);
+}
+
+export async function loadFuturesReadiness() {
+  return await loadState('futures_readiness');
+}
+
 export async function closeDB() {
   if (db) {
     db.close();

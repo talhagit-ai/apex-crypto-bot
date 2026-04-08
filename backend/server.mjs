@@ -13,7 +13,7 @@ import {
   ASSETS, CAPITAL, SERVER_PORT,
   CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
 } from './config.mjs';
-import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState } from './persistence.mjs';
+import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness } from './persistence.mjs';
 import { log } from './logger.mjs';
 import { TradingEngine } from './engine.mjs';
 import { KrakenClient } from './kraken-client.mjs';
@@ -42,15 +42,18 @@ let lastFallbackCheck = Date.now(); // for fallback tick timer
 // Real Kraken balances (refreshed every 60s)
 let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
 
-// Futures readiness tracking
-let lastErrorTime      = null;   // null = no errors since deploy
-let futuresReadyNotified = false; // prevent duplicate messages
-const DEPLOY_TIME      = Date.now(); // used to measure 7 error-free days
+// Futures readiness tracking (persisted across restarts via DB)
+let lastErrorTime        = null;   // timestamp of last real error (null = no errors)
+let futuresReadyNotified = false;  // true once notification was sent
+let firstStartTime       = null;   // when DRY_RUN_SHORTS first started
 
-// Wrapper: track errors + notify Telegram
+// Wrapper: track errors + notify Telegram + persist
 function reportError(msg) {
   lastErrorTime = Date.now();
   notifyError(msg);
+  if (DRY_RUN_SHORTS) {
+    saveFuturesReadiness({ lastErrorTime, futuresReadyNotified, firstStartTime }).catch(() => {});
+  }
 }
 
 // Kraken asset name → our asset id mapping
@@ -633,10 +636,10 @@ function checkFuturesReadiness() {
   const exitCount   = shortExits.length;
   const winRate     = exitCount >= 5 ? (wins.length / exitCount) * 100 : 0;
 
-  // 7 error-free days: either no errors at all, or last error was >7 days ago
-  const SEVEN_DAYS    = 7 * 24 * 60 * 60 * 1000;
+  // 7 error-free days measured from firstStartTime (persists across restarts)
+  const startRef      = firstStartTime || Date.now();
   const errorFreeDays = lastErrorTime === null
-    ? (Date.now() - DEPLOY_TIME) / (24 * 60 * 60 * 1000)
+    ? (Date.now() - startRef) / (24 * 60 * 60 * 1000)
     : (Date.now() - lastErrorTime) / (24 * 60 * 60 * 1000);
   const noRecentErrors = errorFreeDays >= 7;
 
@@ -648,6 +651,7 @@ function checkFuturesReadiness() {
   if (signalCount >= 50 && winRate >= 40 && exitCount >= 10 && noRecentErrors) {
     futuresReadyNotified = true;
     notifyFuturesReady({ signalCount, winRate, exitCount });
+    saveFuturesReadiness({ lastErrorTime, futuresReadyNotified: true, firstStartTime }).catch(() => {});
     log.info('FUTURES READINESS CRITERIA MET — notification sent');
   }
 }
@@ -749,6 +753,20 @@ async function start() {
     engine.cash      = savedState.cash      ?? engine.cash;
     engine.riskState = { ...engine.riskState, ...savedState.riskState };
     log.info(`Engine state restored: ${Object.keys(engine.positions).length} positions, cash $${engine.cash?.toFixed(2)}`);
+  }
+
+  // Restore futures readiness state across restarts
+  if (DRY_RUN_SHORTS) {
+    const fr = await loadFuturesReadiness();
+    if (fr) {
+      lastErrorTime        = fr.lastErrorTime        ?? null;
+      futuresReadyNotified = fr.futuresReadyNotified ?? false;
+      firstStartTime       = fr.firstStartTime       ?? Date.now();
+      log.info('Futures readiness state restored', { lastErrorTime, futuresReadyNotified, firstStartTime });
+    } else {
+      firstStartTime = Date.now();
+      await saveFuturesReadiness({ lastErrorTime: null, futuresReadyNotified: false, firstStartTime });
+    }
   }
 
   // 1. Fetch real Kraken balances
