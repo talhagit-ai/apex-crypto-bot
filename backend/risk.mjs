@@ -31,6 +31,7 @@ export function createRiskState(capital) {
     consecutiveLosses: {},       // per asset: { BTCUSDT: 2, ... }
     totalConsecutiveLosses: 0,
     pauseUntil: {},              // per asset: { BTCUSDT: timestamp, ... }
+    lastExitTime: {},            // per asset: { BTCUSDT: { timestamp, reason } }
     allPausedUntil: 0,           // timestamp when all-pause ends
     recentTrades: [],            // last 5 trade results for dynamic scaling
     killed: false,               // kill switch triggered
@@ -163,6 +164,17 @@ export function canOpenPosition(state, assetId, currentPositions, now = Date.now
     return { allowed: false, reason: `${assetId} paused after consecutive losses` };
   }
 
+  // Signal cooldown after SL/TIME exit (prevent immediate re-entry into chop)
+  const lastExit = state.lastExitTime?.[assetId];
+  if (lastExit) {
+    const cooldownMs = lastExit.reason === 'SL' ? 30 * 60 * 1000
+                     : lastExit.reason === 'TIME' ? 15 * 60 * 1000
+                     : 0; // No cooldown after TP (trend was right)
+    if (cooldownMs > 0 && now - lastExit.timestamp < cooldownMs) {
+      return { allowed: false, reason: `${assetId} cooldown after ${lastExit.reason} exit` };
+    }
+  }
+
   // Max positions
   if (currentPositions.length >= MAX_POS) {
     return { allowed: false, reason: `Max ${MAX_POS} positions reached` };
@@ -213,9 +225,9 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   // Internal cash can grow from paper wins while real account has not changed.
   capital = Math.min(capital, state.startCapital);
 
-  // Dynamic risk scaling based on recent wins/losses
-  const winCount = state.recentTrades.filter(t => t.win).length;
-  const dynamicMult = DYNAMIC_RISK[winCount] ?? 1.0;
+  // Dynamic risk scaling based on consecutive loss streak
+  const streak = Math.min(state.totalConsecutiveLosses || 0, 4);
+  const dynamicMult = DYNAMIC_RISK[streak] ?? 1.0;
 
   // Peak hours multiplier
   let peakMult;
@@ -235,8 +247,12 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   // Circuit breaker reduction
   const cbMult = state.riskReduction;
 
+  // Volatility-adjusted sizing: reduce in high vol, increase in low vol
+  const atrPctile = signal.atrPercentile || 50;
+  const volMult = atrPctile > 80 ? 0.70 : atrPctile > 60 ? 0.85 : atrPctile < 20 ? 1.15 : 1.0;
+
   // Combined risk amount
-  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult;
+  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult;
 
   // Account for round-trip fees
   const feeAdjustedRisk = riskAmount - (2 * FEE_RATE * (riskAmount / slDist) * price);

@@ -134,8 +134,9 @@ function buildSystemPrompt(state) {
     .map(([id, r]) => `${id}:${r}`)
     .join(', ') || 'geen data';
 
+  const sideLabels = { BUY: 'OPEN LONG', SHORT: 'OPEN SHORT', SELL: 'CLOSE LONG', COVER: 'CLOSE SHORT', PARTIAL1: 'PARTIAL 1', PARTIAL2: 'PARTIAL 2' };
   const recentTrades = (state?.trades || []).slice(-5).reverse().map(t =>
-    `  • ${t.side} ${t.id} @ $${(t.price || 0).toFixed(2)} (${t.reason || ''})`
+    `  • ${sideLabels[t.side] || t.side} ${t.id} @ $${(t.price || 0).toFixed(2)} (${t.reason || ''})`
   ).join('\n') || '  Nog geen trades';
 
   return `Je bent APEX, een AI crypto trading bot die live handelt op Kraken. Je wordt aangestuurd door een 6-factor signaal systeem (EMA stack, VWAP, RSI, MACD, Volume, RSI-acceleratie) met multi-timeframe regime filtering.

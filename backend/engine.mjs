@@ -136,13 +136,15 @@ export class TradingEngine {
           pos.partial1Taken = true;
           this._logTrade(id, 'PARTIAL1', cur, pqty, pnl, this.P1_R, `Partial @ ${this.P1_R}R`);
 
-          // Half-breakeven SL after first partial
+          // Breakeven SL: full BE in choppy regime, half-BE in trending
+          const regime = this.regimes[id];
+          const isChoppy = regime === 'neutral' || regime === 'bear';
           if (isShort) {
-            const halfBE = pos.originalSl - (pos.originalSl - pos.entry) * 0.5;
-            if (halfBE < pos.sl) { pos.sl = halfBE; pos.breakeven = true; }
+            const beLevel = isChoppy ? pos.entry : pos.originalSl - (pos.originalSl - pos.entry) * 0.5;
+            if (beLevel < pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
           } else {
-            const halfBE = pos.originalSl + (pos.entry - pos.originalSl) * 0.5;
-            if (halfBE > pos.sl) { pos.sl = halfBE; pos.breakeven = true; }
+            const beLevel = isChoppy ? pos.entry : pos.originalSl + (pos.entry - pos.originalSl) * 0.5;
+            if (beLevel > pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
           }
         }
       }
@@ -172,14 +174,33 @@ export class TradingEngine {
         }
       }
 
-      // ── Trailing Stop ───────────────────────────────────────
+      // ── Trailing Stop (adaptive by regime) ──────────────────
       if (pnlR >= this.T_R) {
+        const regime = this.regimes[id];
+        const isStrongTrend = regime === 'bull' && pos.age < this.MBARS * 0.5;
+        // Wider trail in strong trends, tighter in chop
+        const trailMult = isStrongTrend && pnlR > 1.5 ? this.T_ATR * 1.3
+                        : isStrongTrend ? this.T_ATR
+                        : this.T_ATR * 0.8;
         if (isShort) {
-          const newSl = cur + ATR * this.T_ATR;
+          const newSl = cur + ATR * trailMult;
           if (newSl < pos.sl) pos.sl = newSl;
         } else {
-          const newSl = cur - ATR * this.T_ATR;
+          const newSl = cur - ATR * trailMult;
           if (newSl > pos.sl) pos.sl = newSl;
+        }
+      }
+
+      // ── Time Decay: tighten SL as trade ages without hitting P2 ──
+      const ageRatio = pos.age / this.MBARS;
+      if (ageRatio > 0.6 && !pos.partial2Taken && pnlR > 0) {
+        const decayMult = 1 - ((ageRatio - 0.6) / 0.4) * 0.5; // 1.0 → 0.5
+        if (!isShort) {
+          const decaySl = pos.entry + (cur - pos.entry) * (1 - decayMult);
+          if (decaySl > pos.sl) pos.sl = decaySl;
+        } else {
+          const decaySl = pos.entry - (pos.entry - cur) * (1 - decayMult);
+          if (decaySl < pos.sl) pos.sl = decaySl;
         }
       }
 
@@ -205,11 +226,29 @@ export class TradingEngine {
     const openPositions = Object.entries(this.positions).map(([id, p]) => ({ assetId: id, ...p }));
 
     if (openPositions.length < MAX_POS) {
+      // BTC cross-asset regime filter: if BTC drops >3% in 4h, block alt longs
+      let btcRegimeBlock = false;
+      const btcData = barData['BTCUSDT'];
+      if (btcData?.closes?.length >= 48) {
+        const btcNow  = btcData.closes[btcData.closes.length - 1];
+        const btc4hAgo = btcData.closes[btcData.closes.length - 48];
+        if ((btcNow - btc4hAgo) / btc4hAgo < -0.03) {
+          btcRegimeBlock = true;
+          log.info('BTC regime block: BTC down >3% in 4h — blocking alt longs');
+        }
+      }
+
       // Generate signals and sort by confidence (best first)
       const candidates = [];
       for (const asset of ASSETS) {
         const b = barData[asset.id];
         if (!b || this.positions[asset.id]) continue;
+
+        // Skip alt longs when BTC is dumping
+        if (btcRegimeBlock && asset.id !== 'BTCUSDT') {
+          log.info(`Skip ${asset.id}: BTC regime block active`);
+          continue;
+        }
 
         const rd = regimeData?.[asset.id] || b;
         const sigOpts = { MIN_CONF: this.MCONF, MIN_RR: this.MRR };
@@ -339,6 +378,10 @@ export class TradingEngine {
 
     recordTradeResult(this.riskState, id, pnl, this.equity({ [id]: price }));
 
+    // Record exit for cooldown system
+    this.riskState.lastExitTime = this.riskState.lastExitTime || {};
+    this.riskState.lastExitTime[id] = { timestamp: Date.now(), reason };
+
     log.trade(`EXIT ${id}`, {
       reason,
       pnl: +pnl.toFixed(2),
@@ -385,7 +428,7 @@ export class TradingEngine {
    */
   getState(currentPrices) {
     const eq = this.equity(currentPrices);
-    const closedTrades = this.trades.filter(t => t.side !== 'BUY' && t.side !== 'PARTIAL1' && t.side !== 'PARTIAL2');
+    const closedTrades = this.trades.filter(t => ['SELL', 'COVER'].includes(t.side));
     const wins = closedTrades.filter(t => t.win);
     const winRate = wins.length / Math.max(closedTrades.length, 1) * 100;
     const grossWin = wins.reduce((s, t) => s + (t.pnl || 0), 0);

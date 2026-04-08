@@ -63,6 +63,12 @@ export const CONF_RISK = {
   6: 0.024,   // 2.4% risk at 6/6 (full confidence — only on perfect setups)
 };
 
+// ── Signal Quality Weights ─────────────────────────────────────
+export const FACTOR_WEIGHTS = {
+  emaStack: 1.3, vwap: 1.0, rsi: 0.8, macd: 1.1, volume: 1.2, rsiAccel: 0.6,
+};
+export const FACTOR_WEIGHT_MAX = Object.values(FACTOR_WEIGHTS).reduce((a, b) => a + b, 0);
+
 // ── Regime Filter ──────────────────────────────────────────────
 export const SLOPE_BARS = 10;         // EMA50 slope lookback (10h consistent trend required)
 export const ADX_MIN    = 20;         // Min ADX — only strong trends, no chop
@@ -80,15 +86,15 @@ export const PEAK_HOURS = [
 ];
 export const OFF_PEAK_RISK_MULT = 0.85; // 85% risk during off-peak (crypto is 24/7)
 
-// ── Dynamic Risk Scaling ───────────────────────────────────────
-export const DYNAMIC_RISK = {
-  5: 1.15,    // 4-5 wins out of last 5 → +15%
-  4: 1.15,
-  3: 1.00,    // 3 wins → normal
-  2: 0.85,    // 2 wins → -15%
-  1: 0.70,    // 1 win → -30%
-  0: 0.50,    // 0 wins → -50% (capital preservation)
+// ── Dynamic Risk Scaling (consecutive loss streak) ────────────
+export const STREAK_MULT = {
+  0: 1.00,    // No consecutive losses → normal
+  1: 0.90,    // 1 loss in a row → -10%
+  2: 0.75,    // 2 losses → -25%
+  3: 0.50,    // 3 losses → halve risk
+  4: 0.30,    // 4+ losses → minimal risk, wait for trend
 };
+export const DYNAMIC_RISK = STREAK_MULT; // backward compat
 
 // ── Crypto Assets ──────────────────────────────────────────────
 export const ASSETS = [

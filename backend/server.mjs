@@ -13,7 +13,7 @@ import {
   ASSETS, CAPITAL, SERVER_PORT,
   CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
 } from './config.mjs';
-import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness } from './persistence.mjs';
+import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness, getPerformanceMetrics } from './persistence.mjs';
 import { log } from './logger.mjs';
 import { TradingEngine } from './engine.mjs';
 import { KrakenClient } from './kraken-client.mjs';
@@ -31,7 +31,7 @@ const buffer  = new CandleBuffer(kraken);
 const orders  = new OrderManager(kraken);
 
 // Engine + DB initialized async in start()
-let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS });
+let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS });
 
 let wsClients = new Set();
 let tickCount  = 0;
@@ -230,6 +230,14 @@ app.post('/api/test-futures', async (_req, res) => {
 app.post('/telegram-webhook', (req, res) => {
   res.sendStatus(200); // acknowledge immediately
   handleWebhookUpdate(req.body).catch(() => {});
+});
+
+// REST: performance dashboard
+app.get('/api/performance', async (_req, res) => {
+  try {
+    const metrics = await getPerformanceMetrics();
+    res.json(metrics);
+  } catch (e) { res.json({ error: e.message }); }
 });
 
 // REST: debug balances
@@ -493,10 +501,19 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       continue;
     }
 
-    // DRY_RUN_SHORTS: paper-trade short signals without real futures orders
+    // DRY_RUN_SHORTS: log short signal but remove phantom position from engine
     if (isDryRunShorts && pos.side === 'short') {
       log.signal(`DRY RUN SHORT: ${assetId}`, { qty: pos.qty, entry: pos.entry, sl: pos.sl, tp: pos.tp });
       notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
+      _rollbackPosition(assetId, pos);
+      continue;
+    }
+
+    // Safety: never execute shorts when ENABLE_SHORTS is off
+    if (pos.side === 'short' && !ENABLE_SHORTS) {
+      log.error(`CRITICAL: SHORT ${assetId} created when shorts disabled — rolling back`);
+      _rollbackPosition(assetId, pos);
+      reportError(`SHORT ${assetId} aangemaakt terwijl shorts uitgeschakeld`);
       continue;
     }
 
@@ -772,10 +789,11 @@ async function start() {
   // 1. Fetch real Kraken balances
   await refreshBalances();
   if (realBalances.spotUSD > 0) {
-    log.info(`Real Kraken spot balance: $${realBalances.spotUSD.toFixed(2)} USD`);
-    // Sync engine starting capital with real spot balance
+    log.info(`Real Kraken balance: total $${realBalances.spotUSD.toFixed(2)}, cash $${(realBalances.spotCash || 0).toFixed(2)}`);
+    // Capital = total portfolio value (for equity display / risk state)
+    // Cash = only available cash (for position sizing / order placement)
     engine.capital = realBalances.spotUSD;
-    engine.cash    = realBalances.spotUSD;
+    engine.cash    = realBalances.spotCash || realBalances.spotUSD;
   }
   if (realBalances.futuresUSD !== null) {
     log.info(`Real Kraken futures balance: $${realBalances.futuresUSD.toFixed(2)} USD`);

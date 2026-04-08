@@ -171,3 +171,78 @@ export function volumeRatio(volumes, n = 20) {
   const avg = sl.reduce((a, b) => a + b, 0) / sl.length;
   return volumes[volumes.length - 1] / (avg || 1);
 }
+
+/**
+ * Detect RSI/Price Divergence
+ * Bullish: price lower low, RSI higher low
+ * Bearish: price higher high, RSI lower high
+ * @returns {{ bullDiv: boolean, bearDiv: boolean }}
+ */
+export function detectDivergence(closes, n = 14, lookback = 20) {
+  if (closes.length < lookback + n) return { bullDiv: false, bearDiv: false };
+  const end = closes.length;
+  const start = end - lookback;
+
+  // Find two lowest lows and two highest highs in lookback window
+  let lo1 = Infinity, lo1i = start, lo2 = Infinity, lo2i = start;
+  let hi1 = -Infinity, hi1i = start, hi2 = -Infinity, hi2i = start;
+
+  for (let i = start; i < end; i++) {
+    if (closes[i] < lo1) { lo2 = lo1; lo2i = lo1i; lo1 = closes[i]; lo1i = i; }
+    else if (closes[i] < lo2) { lo2 = closes[i]; lo2i = i; }
+    if (closes[i] > hi1) { hi2 = hi1; hi2i = hi1i; hi1 = closes[i]; hi1i = i; }
+    else if (closes[i] > hi2) { hi2 = closes[i]; hi2i = i; }
+  }
+
+  // RSI at those points
+  const rsiAtLo1 = rsi(closes.slice(0, lo1i + 1), n);
+  const rsiAtLo2 = rsi(closes.slice(0, lo2i + 1), n);
+  const rsiAtHi1 = rsi(closes.slice(0, hi1i + 1), n);
+  const rsiAtHi2 = rsi(closes.slice(0, hi2i + 1), n);
+
+  // Bullish div: price makes lower low but RSI makes higher low
+  const bullDiv = lo1 < lo2 && lo1i > lo2i && rsiAtLo1 > rsiAtLo2;
+  // Bearish div: price makes higher high but RSI makes lower high
+  const bearDiv = hi1 > hi2 && hi1i > hi2i && rsiAtHi1 < rsiAtHi2;
+
+  return { bullDiv, bearDiv };
+}
+
+/**
+ * ATR Percentile — where current ATR sits in recent history (0-100)
+ * High = volatile, Low = quiet
+ */
+export function atrPercentile(highs, lows, closes, n = 14, lookback = 50) {
+  if (closes.length < n + lookback) return 50; // default if not enough data
+  const atrs = [];
+  for (let i = n + 1; i <= lookback; i++) {
+    const end = closes.length - lookback + i;
+    if (end < n + 1) continue;
+    const h = highs.slice(0, end), l = lows.slice(0, end), c = closes.slice(0, end);
+    atrs.push(calcATR(h, l, c, n));
+  }
+  const current = calcATR(highs, lows, closes, n);
+  const rank = atrs.filter(a => a <= current).length / (atrs.length || 1);
+  return rank * 100;
+}
+
+/**
+ * Volatility Regime — classifies market condition using Kaufman Efficiency Ratio
+ * Returns: 'clean_trend' | 'trending' | 'volatile' | 'ranging'
+ */
+export function volatilityRegime(closes, highs, lows, lookback = 50) {
+  if (closes.length < lookback + 1) return 'trending'; // default
+  const n = closes.length;
+  const netMove = Math.abs(closes[n - 1] - closes[n - lookback]);
+  let totalMove = 0;
+  for (let i = n - lookback + 1; i < n; i++) {
+    totalMove += Math.abs(closes[i] - closes[i - 1]);
+  }
+  const efficiency = netMove / (totalMove || 1e-9);
+  const atrPct = calcATR(highs, lows, closes, 14) / (closes[n - 1] || 1);
+
+  if (efficiency > 0.35 && atrPct < 0.015) return 'clean_trend';
+  if (efficiency > 0.25) return 'trending';
+  if (atrPct > 0.025) return 'volatile';
+  return 'ranging';
+}

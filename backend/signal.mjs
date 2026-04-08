@@ -3,8 +3,8 @@
 //  Long + Short signals, 6-factor confirmation, multi-TF regime
 // ═══════════════════════════════════════════════════════════════
 
-import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio } from './indicators.mjs';
-import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW } from './config.mjs';
+import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence } from './indicators.mjs';
+import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX } from './config.mjs';
 
 // ── Regime Filters ─────────────────────────────────────────────
 
@@ -46,6 +46,30 @@ export function checkBearishRegime(closes, highs, lows, regimeATR = 0.05) {
   );
 }
 
+// ── Regime Strength ───────────────────────────────────────────
+
+/**
+ * Assess how strong the current trend is (0-1 scale)
+ * Returns { strength, weakening, strengthening }
+ */
+export function regimeStrength(closes, highs, lows) {
+  if (closes.length < 60) return { strength: 0.5, weakening: false, strengthening: false };
+  const n = closes.length - 1;
+  const e8  = ema(closes, 8);
+  const e21 = ema(closes, 21);
+  const e50 = ema(closes, 50);
+  const adx = calcADX(highs, lows, closes, 14);
+  const emaSpread = (e8[n] - e21[n]) / closes[n] * 100;
+  const slopeNorm = (e50[n] - e50[Math.max(0, n - 10)]) / closes[n] * 100;
+
+  const strength = (adx / 100) * 0.4 + Math.min(Math.abs(emaSpread), 2) / 2 * 0.3 + Math.min(Math.abs(slopeNorm), 1) * 0.3;
+  return {
+    strength,
+    weakening: adx < 25 && Math.abs(emaSpread) < 0.3 && Math.abs(emaSpread) > 0,
+    strengthening: adx > 30 && Math.abs(emaSpread) > 0.5,
+  };
+}
+
 // ── Signal Generators ──────────────────────────────────────────
 
 /**
@@ -79,6 +103,10 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   if (ADX < ADX_MIN) return null;
 
+  // Volatility regime filter: skip choppy/volatile markets
+  const volRegime = volatilityRegime(closes, highs, lows);
+  if (volRegime === 'volatile' || volRegime === 'ranging') return null;
+
   // ADX must be rising over 6 bars (30 min, with 5% tolerance)
   const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
   if (ADX < ADX_prev * 0.95) return null;
@@ -93,6 +121,10 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
     if (regimeData.closes[rn] < re8[rn]) return null;
   }
 
+  // Regime strength: skip if trend is weakening
+  const rs = regimeStrength(closes, highs, lows);
+  if (rs.weakening) return null;
+
   const f1 = e8[n] > e13[n] && e13[n] > e21[n];  // EMA stack bull
   const f2 = cur > VWAP;                           // Above VWAP
   const f3 = RSI > 42 && RSI < 68;                 // RSI sweet spot
@@ -100,13 +132,31 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
   const f6 = RSI > RSI2 && RSI2 > RSI3;           // RSI accelerating up
 
-  const conf    = [f1, f2, f3, f4, f5, f6].filter(Boolean).length;
+  // Weighted quality score (max = FACTOR_WEIGHT_MAX ≈ 5.0)
+  const W = FACTOR_WEIGHTS;
+  let qualityScore = (f1?W.emaStack:0) + (f2?W.vwap:0) + (f3?W.rsi:0) + (f4?W.macd:0) + (f5?W.volume:0) + (f6?W.rsiAccel:0);
+
+  // Divergence bonus: bullish divergence = extra quality
+  const { bullDiv, bearDiv } = detectDivergence(closes);
+  if (bullDiv) qualityScore += 0.5;
+  if (bearDiv) qualityScore -= 0.3; // bearish div weakens long signal
+
+  const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6); // normalized 0-6
+
   const minConf = opts.MIN_CONF ?? MIN_CONF;
   if (conf < minConf) return null;
   if (RSI > 68) return null; // don't chase
 
+  // ATR percentile for dynamic TP + volatility-adjusted sizing
+  const atrPctile = atrPercentile(highs, lows, closes);
+
+  // Dynamic TP: tighter in low vol, wider in high vol
+  let dynTpM = asset.tpM;
+  if (atrPctile < 30) dynTpM *= 0.80;
+  else if (atrPctile > 70) dynTpM *= 1.15;
+
   const sl    = cur - ATR_SL * asset.slM;
-  const tp    = cur + ATR_SL * asset.tpM;
+  const tp    = cur + ATR_SL * dynTpM;
   const slDist = Math.abs(cur - sl);
   const tpDist = Math.abs(tp - cur);
   const rr    = tpDist / Math.max(slDist, 1e-9);
@@ -118,11 +168,13 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
     action: 'BUY',
     side:   'long',
     asset:  asset.id,
-    conf, rr: +rr.toFixed(2),
+    conf, qualityScore: +qualityScore.toFixed(2), rr: +rr.toFixed(2),
     price: cur,
     sl:    +sl.toFixed(asset.pricePrecision),
     tp:    +tp.toFixed(asset.pricePrecision),
     atr:   ATR,
+    atrPercentile: +atrPctile.toFixed(0),
+    volRegime,
     factors: { f1, f2, f3, f4, f5, f6 },
     indicators: {
       rsi: +RSI.toFixed(1), adx: +ADX.toFixed(1),
@@ -164,6 +216,10 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   // Pre-filter: below EMA50 + trending
   if (ADX < ADX_MIN || cur > e50[n]) return null;
 
+  // Volatility regime filter
+  const volRegime = volatilityRegime(closes, highs, lows);
+  if (volRegime === 'volatile' || volRegime === 'ranging') return null;
+
   // ADX must be rising over 6 bars (30 min, with 5% tolerance)
   const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
   if (ADX < ADX_prev * 0.95) return null;
@@ -175,6 +231,10 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
     if (regimeData.closes[rn] > re8[rn]) return null;
   }
 
+  // Regime strength: skip if downtrend is weakening
+  const rs = regimeStrength(closes, highs, lows);
+  if (rs.weakening) return null;
+
   // ── 6-Factor Bearish Confirmation ─────────────────────────
   const f1 = e8[n] < e13[n] && e13[n] < e21[n];  // EMA stack bear
   const f2 = cur < VWAP;                           // Below VWAP
@@ -183,14 +243,31 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const f5 = VR >= 1.2;                            // Volume above average (real confirmation)
   const f6 = RSI < RSI2 && RSI2 < RSI3;           // RSI accelerating down
 
-  const conf    = [f1, f2, f3, f4, f5, f6].filter(Boolean).length;
+  // Weighted quality score
+  const W = FACTOR_WEIGHTS;
+  let qualityScore = (f1?W.emaStack:0) + (f2?W.vwap:0) + (f3?W.rsi:0) + (f4?W.macd:0) + (f5?W.volume:0) + (f6?W.rsiAccel:0);
+
+  // Divergence bonus: bearish divergence = extra quality for short
+  const { bullDiv, bearDiv } = detectDivergence(closes);
+  if (bearDiv) qualityScore += 0.5;
+  if (bullDiv) qualityScore -= 0.3; // bullish div weakens short signal
+
+  const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6);
+
   const minConf = opts.MIN_CONF ?? MIN_CONF;
   if (conf < minConf) return null;
   if (RSI < 32) return null; // don't chase oversold
 
+  const atrPctile = atrPercentile(highs, lows, closes);
+
+  // Dynamic TP
+  let dynTpM = asset.tpM;
+  if (atrPctile < 30) dynTpM *= 0.80;
+  else if (atrPctile > 70) dynTpM *= 1.15;
+
   // Short: SL above entry, TP below entry
   const sl    = cur + ATR_SL * asset.slM;
-  const tp    = cur - ATR_SL * asset.tpM;
+  const tp    = cur - ATR_SL * dynTpM;
   const slDist = Math.abs(sl - cur);
   const tpDist = Math.abs(cur - tp);
   const rr    = tpDist / Math.max(slDist, 1e-9);
@@ -202,11 +279,13 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
     action: 'SELL',
     side:   'short',
     asset:  asset.id,
-    conf, rr: +rr.toFixed(2),
+    conf, qualityScore: +qualityScore.toFixed(2), rr: +rr.toFixed(2),
     price: cur,
     sl:    +sl.toFixed(asset.pricePrecision),
     tp:    +tp.toFixed(asset.pricePrecision),
     atr:   ATR,
+    atrPercentile: +atrPctile.toFixed(0),
+    volRegime,
     factors: { f1, f2, f3, f4, f5, f6 },
     indicators: {
       rsi: +RSI.toFixed(1), adx: +ADX.toFixed(1),

@@ -191,6 +191,19 @@ export async function loadFuturesReadiness() {
   return await loadState('futures_readiness');
 }
 
+export async function getPerformanceMetrics() {
+  if (!db) return {};
+  const [byAsset, byHour, weekly] = await Promise.all([
+    db.execute(`SELECT asset, COUNT(*) as trades, SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) as wins,
+      SUM(pnl) as total_pnl, AVG(pnl) as avg_pnl FROM trades WHERE side IN ('SELL','COVER') AND pnl IS NOT NULL GROUP BY asset`),
+    db.execute(`SELECT CAST(strftime('%H', datetime(timestamp/1000, 'unixepoch')) AS INTEGER) as hour,
+      COUNT(*) as trades, SUM(pnl) as total_pnl FROM trades WHERE side IN ('SELL','COVER') AND pnl IS NOT NULL GROUP BY hour`),
+    db.execute(`SELECT strftime('%Y-W%W', datetime(timestamp/1000, 'unixepoch')) as week,
+      SUM(pnl) as pnl, COUNT(*) as trades FROM trades WHERE side IN ('SELL','COVER') AND pnl IS NOT NULL GROUP BY week ORDER BY week DESC LIMIT 12`),
+  ]);
+  return { byAsset: byAsset.rows, byHour: byHour.rows, weekly: weekly.rows };
+}
+
 export async function closeDB() {
   if (db) {
     db.close();

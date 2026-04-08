@@ -62,6 +62,17 @@ export class CandleBuffer {
     const lastTs = buf.timestamps[buf.timestamps.length - 1];
     if (lastTs && candle.timestamp <= lastTs) return;
 
+    // Data validation: reject bad candles
+    const lastClose = buf.closes[buf.closes.length - 1];
+    if (lastClose) {
+      if (Math.abs(candle.close - lastClose) / lastClose > 0.15) {
+        log.warn(`SPIKE REJECTED: ${assetId} [${interval}m] ${lastClose}→${candle.close}`);
+        return;
+      }
+      if (candle.volume <= 0) return; // skip zero-volume (exchange gap)
+      if (candle.high < candle.low) return; // impossible candle
+    }
+
     buf.closes.push(candle.close);
     buf.highs.push(candle.high);
     buf.lows.push(candle.low);
@@ -132,7 +143,7 @@ export class CandleBuffer {
         bars.highs.push(Number(k[2]));
         bars.lows.push(Number(k[3]));
         bars.closes.push(Number(k[4]));
-        bars.volumes.push(Number(k[5]));
+        bars.volumes.push(Number(k[6])); // Kraken OHLC: [ts, open, high, low, close, VWAP, volume, count]
       }
     } catch (err) {
       log.error(`Failed to fetch history for ${asset.id} [${interval}]`, { err: err.message });
