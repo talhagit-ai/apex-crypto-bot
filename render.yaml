@@ -11,6 +11,8 @@ services:
         value: 100
       - key: ENABLE_SHORTS
         value: false
+      - key: DRY_RUN_SHORTS
+        value: true
       - key: KRAKEN_API_KEY
         sync: false
       - key: KRAKEN_API_SECRET

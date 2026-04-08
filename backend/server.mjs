@@ -31,7 +31,7 @@ const buffer  = new CandleBuffer(kraken);
 const orders  = new OrderManager(kraken);
 
 // Engine + DB initialized async in start()
-let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS });
+let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS });
 
 let wsClients = new Set();
 let tickCount  = 0;
@@ -122,18 +122,8 @@ async function refreshBalances() {
     // Sync engine capital with real total portfolio value
     if (totalUSD > 0) {
       engine.capital = totalUSD;
-      // startCapital must match what equity() returns (cash-based), otherwise
-      // kill switch fires immediately on startup (holdings not in engine.cash).
-      // Use spotCash so kill switch threshold is based on tradable cash only.
-      engine.riskState.startCapital = totalCashUSD || totalUSD;
-
-      // After fresh balance fetch, reset kill/circuit-breaker if portfolio healthy.
-      // Previous session may have triggered it; real account is the source of truth.
-      if (engine.riskState.killed || engine.riskState.riskReduction === 0) {
-        log.info('Balance refresh: resetting kill switch — portfolio confirmed healthy');
-        engine.riskState.killed = false;
-        engine.riskState.riskReduction = 1.0;
-      }
+      // startCapital is set once at startup — don't overwrite on periodic refreshes
+      // or drawdown tracking becomes meaningless (baseline keeps moving).
     }
   } catch (e) {
     log.warn('Could not fetch spot balance', { err: e.message });
@@ -512,11 +502,12 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       continue;
     }
 
-    // DRY_RUN_SHORTS: log short signal but remove phantom position from engine
+    // DRY_RUN_SHORTS: mark as paper position, let engine manage SL/TP/trailing.
+    // Do NOT rollback — engine tracks the full lifecycle so win/loss can be measured.
     if (isDryRunShorts && pos.side === 'short') {
       log.signal(`DRY RUN SHORT: ${assetId}`, { qty: pos.qty, entry: pos.entry, sl: pos.sl, tp: pos.tp });
       notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
-      _rollbackPosition(assetId, pos);
+      pos.paperOnly = true; // flag: engine tracks it, no real futures order placed
       continue;
     }
 
@@ -700,6 +691,7 @@ async function reconcilePositions() {
 
     for (const [assetId, pos] of Object.entries(engine.positions)) {
       if (pos.side === 'short') continue;
+      if (pos.paperOnly) continue; // paper-tracked position — not on Kraken
       if (!krakenHoldings[assetId] || krakenHoldings[assetId] < pos.qty * 0.5) {
         log.warn(`RECONCILE: Engine has LONG ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
         _rollbackPosition(assetId, pos);
@@ -721,6 +713,7 @@ async function reconcilePositions() {
         // Detect phantom shorts (in engine but not on Kraken)
         for (const [assetId, pos] of Object.entries(engine.positions)) {
           if (pos.side !== 'short') continue;
+          if (pos.paperOnly) continue; // paper short — intentionally not on Kraken
           if (!futuresMap[assetId]) {
             log.warn(`RECONCILE: Engine has SHORT ${assetId} but Kraken Futures has no position — removing phantom`);
             _rollbackPosition(assetId, pos);
@@ -770,7 +763,7 @@ async function start() {
   // Load optimizer params from DB (overrides defaults)
   const savedParams = await loadParams();
   if (savedParams._meta) {
-    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS });
+    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS });
     log.info('Loaded optimizer params from DB', savedParams._meta);
   }
 
@@ -801,10 +794,20 @@ async function start() {
   await refreshBalances();
   if (realBalances.spotUSD > 0) {
     log.info(`Real Kraken balance: total $${realBalances.spotUSD.toFixed(2)}, cash $${(realBalances.spotCash || 0).toFixed(2)}`);
-    // Capital = total portfolio value (for equity display / risk state)
-    // Cash = only available cash (for position sizing / order placement)
+    // capital = total portfolio (for equity display)
+    // cash = tradable cash only (for position sizing / order placement)
     engine.capital = realBalances.spotUSD;
     engine.cash    = realBalances.spotCash || realBalances.spotUSD;
+    // startCapital baseline — set once at startup so kill switch / drawdown
+    // tracking stays accurate across the session.
+    engine.riskState.startCapital = realBalances.spotCash || realBalances.spotUSD;
+    // Reset kill switch if triggered in a previous session.
+    // Kraken balance is source of truth: if account is funded, we can trade.
+    if (engine.riskState.killed || engine.riskState.riskReduction === 0) {
+      log.info('Startup: resetting kill switch — Kraken balance confirmed healthy');
+      engine.riskState.killed = false;
+      engine.riskState.riskReduction = 1.0;
+    }
   }
   if (realBalances.futuresUSD !== null) {
     log.info(`Real Kraken futures balance: $${realBalances.futuresUSD.toFixed(2)} USD`);

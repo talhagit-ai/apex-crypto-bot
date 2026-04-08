@@ -332,6 +332,7 @@ export class TradingEngine {
           partial2Taken: false,
           breakeven: false,
           margin: isShort ? cost * 0.10 : 0,
+          conf: sig.conf,
         };
 
         openPositions.push({ assetId: asset.id });
