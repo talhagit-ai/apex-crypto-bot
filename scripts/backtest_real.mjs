@@ -21,31 +21,61 @@ const args = Object.fromEntries(
     .filter(a => a.startsWith('--'))
     .map(a => a.slice(2).split('='))
 );
-const DAYS   = parseInt(args.days || '28', 10);   // default 4 weeks
+// Kraken stores max 720 5m bars = ~60h. Use 3 days to stay within range.
+// For longer backtests, bars must be recorded locally as they arrive.
+const DAYS   = parseInt(args.days || '3', 10);
 const QUIET  = args.quiet === 'true';
 
 // ── Kraken REST ───────────────────────────────────────────────
 const api = new Kraken({ key: KRAKEN_API_KEY, secret: KRAKEN_API_SECRET });
 const INTERVAL_MAP = { '5': 5, '15': 15, '60': 60 };
 
+// Fetch all bars since a given timestamp, paginating as needed (Kraken caps at 720/call)
 async function fetchKlines(krakenPair, interval, since) {
-  const resp = await api.ohlc({
-    pair:     krakenPair,
-    interval: INTERVAL_MAP[interval] || 5,
-    since:    since ? Math.floor(since / 1000) : undefined,
-  });
-  const pairKey = Object.keys(resp).find(k => k !== 'last');
-  const bars = resp[pairKey] || [];
-  // Kraken returns [ts, open, high, low, close, vwap, volume, count]
-  // Last bar is in-progress — drop it
-  return bars.slice(0, -1).map(b => ({
-    timestamp: Number(b[0]) * 1000,
-    open:   parseFloat(b[1]),
-    high:   parseFloat(b[2]),
-    low:    parseFloat(b[3]),
-    close:  parseFloat(b[4]),
-    volume: parseFloat(b[6]),
-  }));
+  const intervalMin = INTERVAL_MAP[interval] || 5;
+  const allBars = [];
+  let cursor = Math.floor(since / 1000); // Kraken uses seconds
+  const nowSec = Math.floor(Date.now() / 1000);
+  let pages = 0;
+
+  while (cursor < nowSec && pages < 20) {
+    pages++;
+    const resp = await api.ohlc({ pair: krakenPair, interval: intervalMin, since: cursor });
+    const pairKey = Object.keys(resp).find(k => k !== 'last');
+    const bars = resp[pairKey] || [];
+
+    if (bars.length === 0) break;
+
+    // Drop last (in-progress) bar
+    const closed = bars.slice(0, -1);
+    for (const b of closed) {
+      allBars.push({
+        timestamp: Number(b[0]) * 1000,
+        open:   parseFloat(b[1]),
+        high:   parseFloat(b[2]),
+        low:    parseFloat(b[3]),
+        close:  parseFloat(b[4]),
+        volume: parseFloat(b[6]),
+      });
+    }
+
+    if (bars.length < 2) break; // nothing useful returned
+
+    // Advance cursor to just after the last bar's timestamp
+    const lastBarTs = Number(bars[bars.length - 1][0]); // seconds
+    if (lastBarTs <= cursor) break; // safety: no progress
+    cursor = lastBarTs + 1;
+
+    await new Promise(r => setTimeout(r, 250)); // rate limit
+  }
+
+  // Deduplicate by timestamp and sort
+  const seen = new Set();
+  return allBars.filter(b => {
+    if (seen.has(b.timestamp)) return false;
+    seen.add(b.timestamp);
+    return true;
+  }).sort((a, b) => a.timestamp - b.timestamp);
 }
 
 // ── Build bar arrays from candle list ─────────────────────────
@@ -175,7 +205,7 @@ async function main() {
     const buf = bufs[asset.id][CANDLE_INTERVAL];
     if (buf.closes.length > 0) finalPrices[asset.id] = buf.closes[buf.closes.length - 1];
   }
-  for (const [id, pos] of Object.entries(engine.positions)) {
+  for (const [id] of Object.entries(engine.positions)) {
     engine._closePosition(id, finalPrices[id] || 0, 'EOT');
   }
 
@@ -199,10 +229,11 @@ async function main() {
   // Per-asset breakdown
   const byAsset = {};
   for (const t of fullExits) {
-    if (!byAsset[t.assetId]) byAsset[t.assetId] = { trades: 0, wins: 0, pnl: 0 };
-    byAsset[t.assetId].trades++;
-    if ((t.pnl || 0) > 0) byAsset[t.assetId].wins++;
-    byAsset[t.assetId].pnl += t.pnl || 0;
+    const key = t.id || t.assetId || 'unknown';
+    if (!byAsset[key]) byAsset[key] = { trades: 0, wins: 0, pnl: 0 };
+    byAsset[key].trades++;
+    if ((t.pnl || 0) > 0) byAsset[key].wins++;
+    byAsset[key].pnl += t.pnl || 0;
   }
 
   console.log('═══════════════════════════════════════════════════════════');

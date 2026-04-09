@@ -273,7 +273,7 @@ export const ASSETS = [
     id: 'LTCUSD',
     symbol: 'LTCUSD',
     krakenSymbol: 'LTC/USD',
-    krakenPair:   'XLTCUSD',
+    krakenPair:   'XLTCZUSD',
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
