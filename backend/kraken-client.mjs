@@ -32,7 +32,8 @@ export class KrakenClient extends EventEmitter {
       secret: KRAKEN_API_SECRET,
     });
     this.ws = null;
-    this._lastBars = {}; // `${symbol}-${interval}` → last seen bar (for close detection)
+    this._lastBars = {};       // `${symbol}-${interval}` → last seen bar (for close detection)
+    this._emittedCloses = new Set(); // dedup guard: `${assetId}-${interval}-${ts}`
   }
 
   // ── REST ──────────────────────────────────────────────────────
@@ -209,8 +210,20 @@ export class KrakenClient extends EventEmitter {
       // Kraken v2 has no "confirm" flag — detect bar close by interval_begin change.
       // When a new interval starts (update type only), the PREVIOUS bar is now closed.
       if (msg.type === 'update' && prev && prev.interval_begin !== bar.interval_begin) {
+        const closedTs = new Date(prev.timestamp).getTime();
+
+        // Dedup: skip if we already emitted this closed bar (guards against double-WS)
+        const closeKey = `${asset.id}-${interval}-${closedTs}`;
+        if (this._emittedCloses.has(closeKey)) continue;
+        this._emittedCloses.add(closeKey);
+        // Keep set bounded (max 500 entries)
+        if (this._emittedCloses.size > 500) {
+          const first = this._emittedCloses.values().next().value;
+          this._emittedCloses.delete(first);
+        }
+
         const closedCandle = {
-          timestamp: new Date(prev.timestamp).getTime(),
+          timestamp: closedTs,
           open:   parseFloat(prev.open   || 0),
           high:   parseFloat(prev.high   || 0),
           low:    parseFloat(prev.low    || 0),
