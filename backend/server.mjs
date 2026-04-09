@@ -785,7 +785,13 @@ async function start() {
     engine.positions = savedState.positions || {};
     engine.cash      = savedState.cash      ?? engine.cash;
     engine.riskState = { ...engine.riskState, ...savedState.riskState };
-    log.info(`Engine state restored: ${Object.keys(engine.positions).length} positions, cash $${engine.cash?.toFixed(2)}`);
+    // Prune stale loss logs immediately — removes expired entries so
+    // dailyLoss/weeklyLoss reflect only actual losses within the rolling window
+    engine.riskState.dailyLossLog  = (engine.riskState.dailyLossLog  || []).filter(e => Date.now() - e.timestamp < 24 * 60 * 60 * 1000);
+    engine.riskState.weeklyLossLog = (engine.riskState.weeklyLossLog || []).filter(e => Date.now() - e.timestamp <  7 * 24 * 60 * 60 * 1000);
+    engine.riskState.dailyLoss  = engine.riskState.dailyLossLog.reduce((s, e) => s + e.pnl, 0);
+    engine.riskState.weeklyLoss = engine.riskState.weeklyLossLog.reduce((s, e) => s + e.pnl, 0);
+    log.info(`Engine state restored: ${Object.keys(engine.positions).length} positions, cash $${engine.cash?.toFixed(2)}, dailyLoss $${engine.riskState.dailyLoss.toFixed(2)}`);
   }
 
   // Restore futures readiness state across restarts
