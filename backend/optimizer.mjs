@@ -19,23 +19,34 @@ import { getRecentTrades, saveOptimizerRun, saveState, loadState } from './persi
 
 // ── Default params (baseline — matches config.mjs) ─────────────
 const DEFAULT_PARAMS = {
-  MIN_CONF:     4,
-  MIN_RR:       1.8,
+  MIN_CONF:     5,
+  MIN_RR:       3.0,
   PARTIAL1_R:   0.5,
   PARTIAL1_PCT: 0.25,
   PARTIAL2_R:   1.0,
   PARTIAL2_PCT: 0.25,
   TRAIL_R:      1.2,
   TRAIL_ATR:    1.5,
-  MAX_BARS:     40,
-  CONF_RISK:    { 4: 0.010, 5: 0.016, 6: 0.024 },
+  MAX_BARS:     50,
+  CONF_RISK:    { 3: 0.008, 4: 0.015, 5: 0.025, 6: 0.030 },
   assets: {
     BTCUSDT: { slM: 1.8, tpM: 4.8 },
     ETHUSDT: { slM: 1.5, tpM: 4.2 },
     SOLUSDT: { slM: 1.7, tpM: 4.5 },
     XRPUSDT: { slM: 1.5, tpM: 4.0 },
-    BNBUSDT: { slM: 1.7, tpM: 4.4 },
-    ADAUSDT: { slM: 1.5, tpM: 3.4 },
+    ADAUSDT: { slM: 1.5, tpM: 3.8 },
+    DOTUSD:  { slM: 1.6, tpM: 4.0 },
+    LINKUSD: { slM: 1.6, tpM: 4.2 },
+    AVAXUSD: { slM: 1.7, tpM: 4.5 },
+    DOGEUSD: { slM: 1.5, tpM: 4.0 },
+    ATOMUSD: { slM: 1.6, tpM: 4.2 },
+    LTCUSD:  { slM: 1.5, tpM: 4.0 },
+    NEARUSD: { slM: 1.6, tpM: 4.2 },
+    UNIUSD:  { slM: 1.6, tpM: 4.5 },
+    AAVEUSD: { slM: 1.7, tpM: 4.8 },
+    POLUSD:  { slM: 1.6, tpM: 4.2 },
+    FILUSD:  { slM: 1.6, tpM: 4.2 },
+    ARBUSD:  { slM: 1.7, tpM: 4.5 },
   },
 };
 
@@ -43,10 +54,11 @@ const DEFAULT_PARAMS = {
 const SEARCH_SPACE = {
   slM:  [1.2, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0],
   tpM:  [3.0, 3.4, 3.8, 4.0, 4.2, 4.5, 4.8, 5.2],
-  CONF_RISK_4: [0.008, 0.010, 0.012],
-  CONF_RISK_5: [0.012, 0.016, 0.020],
-  CONF_RISK_6: [0.020, 0.024, 0.028],
-  MIN_CONF:    [4, 5],
+  CONF_RISK_3: [0.006, 0.008, 0.010],
+  CONF_RISK_4: [0.012, 0.015, 0.018],
+  CONF_RISK_5: [0.020, 0.025, 0.030],
+  CONF_RISK_6: [0.025, 0.030, 0.035],
+  MIN_CONF:    [5, 6],
   TRAIL_ATR:   [1.2, 1.5, 1.8],
 };
 

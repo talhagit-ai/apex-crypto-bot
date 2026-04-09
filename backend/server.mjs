@@ -72,6 +72,7 @@ const KRAKEN_ASSET_MAP = {
   'COMP': 'COMPUSD', 'ENJ':  'ENJUSD',  'FLOW': 'FLOWUSD',
   'KSM':  'KSMUSD',  'SAND': 'SANDUSD', 'MANA': 'MANAUSD',
   'AXS':  'AXSUSD',  '1INCH':'1INCHUSD','OCEAN':'OCEANUSD',
+  'ARB':  'ARBUSD',
 };
 
 async function refreshBalances() {

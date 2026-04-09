@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ═══════════════════════════════════════════════════════════════
-//  APEX CRYPTO V1 — Simulator (300-run validation)
+//  APEX CRYPTO V9 — Simulator (300-run validation)
 //  Tests the full trading engine with synthetic crypto data
 //  Run: node scripts/sim_crypto.mjs
 // ═══════════════════════════════════════════════════════════════
@@ -19,8 +19,19 @@ function initBars(asset) {
           asset.id === 'ETHUSDT' ? 3200 :
           asset.id === 'SOLUSDT' ? 145 :
           asset.id === 'XRPUSDT' ? 0.55 :
-          asset.id === 'BNBUSDT' ? 580 :
-          asset.id === 'ADAUSDT' ? 0.45 : 100;
+          asset.id === 'ADAUSDT' ? 0.45 :
+          asset.id === 'DOTUSD'  ? 7.5 :
+          asset.id === 'LINKUSD' ? 14 :
+          asset.id === 'AVAXUSD' ? 30 :
+          asset.id === 'DOGEUSD' ? 0.16 :
+          asset.id === 'ATOMUSD' ? 8 :
+          asset.id === 'LTCUSD'  ? 85 :
+          asset.id === 'NEARUSD' ? 5.5 :
+          asset.id === 'UNIUSD'  ? 7 :
+          asset.id === 'AAVEUSD' ? 90 :
+          asset.id === 'POLUSD'  ? 0.35 :
+          asset.id === 'FILUSD'  ? 5 :
+          asset.id === 'ARBUSD'  ? 0.65 : 10;
 
   for (let i = 0; i < HISTORY_BARS; i++) {
     // Longer trending phases (80 bars ~ 6.5 hours, like V12 stock sim)
@@ -74,8 +85,8 @@ function runOneWeek() {
       engine.riskState.riskReduction = Math.max(engine.riskState.riskReduction, 1.0);
     }
 
-    // Run engine tick (use 5min data for both signal and regime in sim)
-    engine.tick(barData, barData);
+    // Run engine tick (use 5min data for all TFs in sim — synthetic data)
+    engine.tick(barData, barData, barData);
   }
 
   // Force close any remaining positions at market
@@ -106,7 +117,7 @@ function runOneWeek() {
 // ── Main ──────────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
-console.log('  APEX CRYPTO V1 — SIMULATOR');
+console.log('  APEX CRYPTO V9 — SIMULATOR');
 console.log(`  Capital: €${CAPITAL} | Assets: ${ASSETS.map(a => a.id).join(', ')}`);
 console.log(`  Running ${NUM_WEEKS} weekly simulations...`);
 console.log('═══════════════════════════════════════════════════════════');

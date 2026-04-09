@@ -31,8 +31,8 @@ export const MAX_POS    = 5;          // Max concurrent positions — verhoog me
 export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
 
 // ── Signal Requirements ────────────────────────────────────────
-export const MIN_CONF   = 3;          // Min 3/6 — quality score + CONF_RISK[3]=0.6% protects small trades
-export const MIN_RR     = 2.0;        // Min risk/reward ratio
+export const MIN_CONF   = 5;          // Min 5/6 — only high-quality setups (was 3)
+export const MIN_RR     = 3.0;        // Min risk/reward 3:1 (was 2.0)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
 export const PARTIAL1_R   = 0.5;      // First partial at +0.5R
@@ -53,14 +53,14 @@ export const LOSS_LIMIT          = 4;      // Consecutive losses → pause asset
 export const PAUSE_MINUTES       = 60;     // Pause duration after consecutive losses
 export const TOTAL_LOSS_LIMIT    = 6;      // 6 losses across all → pause all
 export const TOTAL_PAUSE_MINUTES = 90;     // Pause all duration
-export const MAX_RISK_PER_TRADE  = 0.025;  // 2.5% max risk per single trade
+export const MAX_RISK_PER_TRADE  = 0.030;  // 3.0% max risk per single trade
 
 // ── Confidence-Based Risk Sizing ───────────────────────────────
 export const CONF_RISK = {
-  3: 0.006,   // 0.6% risk at 3/6 (minimum confluence — small size)
-  4: 0.010,   // 1.0% risk at 4/6 confidence
-  5: 0.016,   // 1.6% risk at 5/6
-  6: 0.024,   // 2.4% risk at 6/6 (full confidence — only on perfect setups)
+  3: 0.008,   // 0.8% risk at 3/6 (minimum confluence — small size)
+  4: 0.015,   // 1.5% risk at 4/6 confidence
+  5: 0.025,   // 2.5% risk at 5/6
+  6: 0.030,   // 3.0% risk at 6/6 (full confidence — only on perfect setups)
 };
 
 // ── Signal Quality Weights ─────────────────────────────────────
@@ -303,7 +303,92 @@ export const ASSETS = [
     corrGroup: 'ALT7',
     regimeATR: 0.09,
   },
-  // ── Top 12 liquid assets ────────────────────────────────────
+  {
+    id: 'UNIUSD',
+    symbol: 'UNIUSD',
+    krakenSymbol: 'UNI/USD',
+    krakenPair:   'UNIUSD',
+    category: MODE,
+    vol: 0.022,
+    drift: 0.00040,
+    slM: 1.6,
+    tpM: 4.5,
+    minQty: 0.1,
+    qtyStep: 0.1,
+    pricePrecision: 3,
+    color: '#ff007a',
+    corrGroup: 'DEFI1',
+    regimeATR: 0.09,
+  },
+  {
+    id: 'AAVEUSD',
+    symbol: 'AAVEUSD',
+    krakenSymbol: 'AAVE/USD',
+    krakenPair:   'AAVEUSD',
+    category: MODE,
+    vol: 0.025,
+    drift: 0.00042,
+    slM: 1.7,
+    tpM: 4.8,
+    minQty: 0.01,
+    qtyStep: 0.01,
+    pricePrecision: 2,
+    color: '#b6509e',
+    corrGroup: 'DEFI2',
+    regimeATR: 0.09,
+  },
+  {
+    id: 'POLUSD',
+    symbol: 'POLUSD',
+    krakenSymbol: 'POL/USD',
+    krakenPair:   'POLUSD',
+    category: MODE,
+    vol: 0.020,
+    drift: 0.00038,
+    slM: 1.6,
+    tpM: 4.2,
+    minQty: 1,
+    qtyStep: 0.1,
+    pricePrecision: 4,
+    color: '#8247e5',
+    corrGroup: 'L2_1',
+    regimeATR: 0.09,
+  },
+  {
+    id: 'FILUSD',
+    symbol: 'FILUSD',
+    krakenSymbol: 'FIL/USD',
+    krakenPair:   'FILUSD',
+    category: MODE,
+    vol: 0.022,
+    drift: 0.00038,
+    slM: 1.6,
+    tpM: 4.2,
+    minQty: 0.1,
+    qtyStep: 0.1,
+    pricePrecision: 3,
+    color: '#0090ff',
+    corrGroup: 'ALT8',
+    regimeATR: 0.09,
+  },
+  {
+    id: 'ARBUSD',
+    symbol: 'ARBUSD',
+    krakenSymbol: 'ARB/USD',
+    krakenPair:   'ARBUSD',
+    category: MODE,
+    vol: 0.025,
+    drift: 0.00042,
+    slM: 1.7,
+    tpM: 4.5,
+    minQty: 1,
+    qtyStep: 0.1,
+    pricePrecision: 4,
+    color: '#28a0f0',
+    corrGroup: 'L2_2',
+    regimeATR: 0.09,
+  },
+  // ── Top 17 liquid assets ────────────────────────────────────
 ];
 
 // ── Correlation Groups ─────────────────────────────────────────
@@ -324,6 +409,11 @@ export const CORRELATION_RULES = {
   ALT5:  { maxSimultaneous: 1 },  // ATOM
   ALT6:  { maxSimultaneous: 1 },  // LTC
   ALT7:  { maxSimultaneous: 1 },  // NEAR
+  ALT8:  { maxSimultaneous: 1 },  // FIL
+  DEFI1: { maxSimultaneous: 1 },  // UNI
+  DEFI2: { maxSimultaneous: 1 },  // AAVE
+  L2_1:  { maxSimultaneous: 1 },  // POL
+  L2_2:  { maxSimultaneous: 1 },  // ARB
 };
 
 // ── Server ─────────────────────────────────────────────────────
