@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
   ASSETS, CAPITAL, SERVER_PORT,
-  CANDLE_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
+  CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
 } from './config.mjs';
 import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness, getPerformanceMetrics } from './persistence.mjs';
 import { log } from './logger.mjs';
@@ -422,15 +422,18 @@ async function runEngineTick() {
   tickCount++;
   lastFallbackCheck = Date.now();
 
-  // Build barData (5m) and regimeData (1h) from buffer
+  // Build barData (5m), tf15Data (15m), and regimeData (1h) from buffer
   const barData    = {};
   const regimeData = {};
+  const tf15Data   = {};
 
   for (const asset of ASSETS) {
     const d5m = buffer.get(asset.id, CANDLE_INTERVAL);
+    const d15  = buffer.get(asset.id, TF15_INTERVAL);
     const d1h  = buffer.get(asset.id, REGIME_INTERVAL);
     if (!d5m) continue;
     barData[asset.id]    = d5m;
+    tf15Data[asset.id]   = d15 || null;
     regimeData[asset.id] = d1h || d5m; // fallback to 5m if 1h not ready
   }
 
@@ -443,7 +446,7 @@ async function runEngineTick() {
 
   // Run engine logic (signal gen, position management)
   const isDryRun = process.env.DRY_RUN === 'true';
-  engine.tick(barData, regimeData);
+  engine.tick(barData, regimeData, tf15Data);
 
   // Detect changes and place real orders (or log in DRY_RUN mode)
   await _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun);
@@ -833,6 +836,12 @@ async function start() {
 
   // 3. Connect Kraken WebSocket streams
   kraken.connectWebSocket(onBarClose);
+
+  // Backfill candle gaps after WS reconnect
+  kraken.on('reconnected', () => {
+    log.info('WS reconnected — backfilling candle gaps');
+    buffer.refetchRecent().catch(() => {});
+  });
 
   // Fallback: if no tick in 6+ minutes, force tick from buffer data
   setInterval(() => {

@@ -4,7 +4,7 @@
 //  Fetches historical data on startup, then extends with live bars
 // ═══════════════════════════════════════════════════════════════
 
-import { ASSETS, HISTORY_BARS, CANDLE_INTERVAL, REGIME_INTERVAL } from './config.mjs';
+import { ASSETS, HISTORY_BARS, CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL } from './config.mjs';
 import { log } from './logger.mjs';
 
 /**
@@ -31,7 +31,7 @@ export class CandleBuffer {
   async init() {
     log.info('CandleBuffer: fetching history...');
 
-    const intervals = [CANDLE_INTERVAL, REGIME_INTERVAL];
+    const intervals = [CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL];
 
     for (const asset of ASSETS) {
       this.buffers[asset.id] = {};
@@ -124,6 +124,34 @@ export class CandleBuffer {
       if (p) prices[asset.id] = p;
     }
     return prices;
+  }
+
+  /**
+   * Fetch recent bars for all assets to backfill gaps after WS reconnect.
+   * Only fetches last 10 bars (fast, non-blocking).
+   */
+  async refetchRecent() {
+    const intervals = [CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL];
+    for (const asset of ASSETS) {
+      for (const interval of intervals) {
+        try {
+          const klines = await this.client.getKlines(asset.symbol, interval, 10);
+          for (const k of klines) {
+            this.update(asset.id, interval, {
+              timestamp: Number(k[0]),
+              high:   Number(k[2]),
+              low:    Number(k[3]),
+              close:  Number(k[4]),
+              volume: Number(k[6]),
+              closed: true,
+            });
+          }
+        } catch (err) {
+          log.warn(`refetchRecent failed ${asset.id} [${interval}m]`, { err: err.message });
+        }
+      }
+    }
+    log.info('CandleBuffer: gap backfill complete after reconnect');
   }
 
   // ── Private ───────────────────────────────────────────────────

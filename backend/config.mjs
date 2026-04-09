@@ -41,7 +41,7 @@ export const PARTIAL2_R   = 1.0;      // Second partial at +1.0R
 export const PARTIAL2_PCT = 0.25;     // Sell 25% of remaining (18.75% original) — 56% runner
 export const TRAIL_R      = 1.2;      // Start trailing at +1.2R (faster for crypto)
 export const TRAIL_ATR    = 1.5;      // Trailing stop = ATR × 1.5 (slightly wider, more room)
-export const MAX_BARS     = 80;       // Max hold time (bars) — 6.7h, let winners run with BE-SL
+export const MAX_BARS     = 50;       // Max hold time (bars) — 4.2h (was 6.7h), faster rotation for 5m entries
 
 // ── Risk Management ────────────────────────────────────────────
 export const DAILY_LOSS_LIMIT_1  = 0.025;  // 2.5% → reduce risk 50% (3 positions × 1.6% = 4.8% max)
@@ -70,11 +70,12 @@ export const FACTOR_WEIGHTS = {
 export const FACTOR_WEIGHT_MAX = Object.values(FACTOR_WEIGHTS).reduce((a, b) => a + b, 0);
 
 // ── Regime Filter ──────────────────────────────────────────────
-export const SLOPE_BARS = 10;         // EMA50 slope lookback (10h consistent trend required)
-export const ADX_MIN    = 20;         // Min ADX — only strong trends, no chop
+export const SLOPE_BARS = 5;          // EMA50 slope lookback (5h instead of 10h — faster regime detection)
+export const ADX_MIN    = 17;         // Min ADX — trending (17 = clear directional move, not pure chop)
 
 // ── Timeframe ──────────────────────────────────────────────────
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
+export const TF15_INTERVAL      = '15';   // 15-minute candles for confirmation layer
 export const REGIME_INTERVAL    = '60';   // 1-hour candles for regime filter
 export const HISTORY_BARS       = 150;    // Rolling buffer size
 export const VWAP_WINDOW        = 72;     // 6h rolling VWAP (crypto institutional cycles)

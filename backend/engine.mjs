@@ -75,10 +75,11 @@ export class TradingEngine {
    * Process a new bar tick for all assets
    * This is the main loop — called on every new candle
    *
-   * @param {object} barData - { BTCUSDT: { closes, highs, lows, volumes }, ... }
+   * @param {object} barData    - { BTCUSDT: { closes, highs, lows, volumes }, ... }
    * @param {object} regimeData - { BTCUSDT: { closes, highs, lows } } (1H data for regime)
+   * @param {object} tf15Data   - { BTCUSDT: { closes, highs, lows } } (15m confirmation layer)
    */
-  tick(barData, regimeData) {
+  tick(barData, regimeData, tf15Data = null) {
     this.tickCount++;
     if (this.opts.simMode) this.simTime += 5 * 60 * 1000; // advance 5 min per tick
     checkPeriodReset(this.riskState);
@@ -180,14 +181,21 @@ export class TradingEngine {
         }
       }
 
-      // ── Trailing Stop (adaptive by regime) ──────────────────
+      // ── Trailing Stop (adaptive by regime + volatility + age) ──
       if (pnlR >= this.T_R) {
         const regime = this.regimes[id];
+        const vReg   = pos.volRegime || 'trending';
         const isStrongTrend = regime === 'bull' && pos.age < this.MBARS * 0.5;
-        // Wider trail in strong trends, tighter in chop
-        const trailMult = isStrongTrend && pnlR > 1.5 ? this.T_ATR * 1.3
-                        : isStrongTrend ? this.T_ATR
-                        : this.T_ATR * 0.8;
+        // Base trail multiplier by trend strength
+        let trailMult = isStrongTrend && pnlR > 1.5 ? this.T_ATR * 1.3
+                      : isStrongTrend ? this.T_ATR
+                      : this.T_ATR * 0.8;
+        // Volatility regime adjustment
+        if (vReg === 'ranging')     trailMult *= 0.65;  // tight in chop
+        if (vReg === 'clean_trend') trailMult *= 1.25;  // wide in clean trend
+        // Age decay: tighten trail in last 30% of position life
+        const ageRatio2 = pos.age / this.MBARS;
+        if (ageRatio2 > 0.70) trailMult *= Math.max(0.30, 1 - (ageRatio2 - 0.70) * 1.5);
         if (isShort) {
           const newSl = cur + ATR * trailMult;
           if (newSl < pos.sl) pos.sl = newSl;
@@ -238,9 +246,9 @@ export class TradingEngine {
       if (btcData?.closes?.length >= 48) {
         const btcNow  = btcData.closes[btcData.closes.length - 1];
         const btc4hAgo = btcData.closes[btcData.closes.length - 48];
-        if ((btcNow - btc4hAgo) / btc4hAgo < -0.03) {
+        if ((btcNow - btc4hAgo) / btc4hAgo < -0.05) {
           btcRegimeBlock = true;
-          log.info('BTC regime block: BTC down >3% in 4h — blocking alt longs');
+          log.info('BTC regime block: BTC down >5% in 4h — blocking alt longs');
         }
       }
 
@@ -264,8 +272,9 @@ export class TradingEngine {
 
         // ── Try LONG ──────────────────────────────────────────
         const bullRegime = checkRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
+        const d15 = tf15Data?.[asset.id] || null;
         if (bullRegime) {
-          const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd);
+          const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
           if (sig) {
             // Self-learning: adjust quality based on historical performance
             if (this.learningEngine) {
@@ -282,7 +291,7 @@ export class TradingEngine {
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         if (bearRegime && this.opts.enableShorts) {
-          const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd);
+          const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
           if (sig) {
             if (this.learningEngine) {
               const learnMult = this.learningEngine.scoreSignal(

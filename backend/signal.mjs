@@ -75,7 +75,7 @@ export function regimeStrength(closes, highs, lows) {
 /**
  * LONG signal — proven APEX edge (6-factor)
  */
-export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}, regimeData = null) {
+export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}, regimeData = null, tf15Data = null) {
   if (closes.length < 72) return null;
 
   const n   = closes.length - 1;
@@ -103,9 +103,9 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   if (ADX < ADX_MIN) return null;
 
-  // Volatility regime filter: skip choppy/volatile markets
+  // Volatility regime: 'volatile' still hard-blocked (too dangerous), 'ranging' is soft
   const volRegime = volatilityRegime(closes, highs, lows);
-  if (volRegime === 'volatile' || volRegime === 'ranging') return null;
+  if (volRegime === 'volatile') return null;  // hard block: extreme vol = whipsaw
 
   // ADX must be rising over 6 bars (30 min, with 5% tolerance)
   // Skip this check when buffer is small (< 120 bars) — ADX is noisy on startup
@@ -124,9 +124,8 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
     if (regimeData.closes[rn] < re8[rn]) return null;
   }
 
-  // Regime strength: skip if trend is weakening
+  // Regime strength: calculated for quality scoring and position sizing
   const rs = regimeStrength(closes, highs, lows);
-  if (rs.weakening) return null;
 
   const f1 = e8[n] > e13[n] && e13[n] > e21[n];  // EMA stack bull
   const f2 = cur > VWAP;                           // Above VWAP
@@ -138,6 +137,23 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   // Weighted quality score (max = FACTOR_WEIGHT_MAX ≈ 5.0)
   const W = FACTOR_WEIGHTS;
   let qualityScore = (f1?W.emaStack:0) + (f2?W.vwap:0) + (f3?W.rsi:0) + (f4?W.macd:0) + (f5?W.volume:0) + (f6?W.rsiAccel:0);
+
+  // Volatility regime quality adjustments (ranging = penalty, clean_trend = bonus)
+  if (volRegime === 'ranging')     qualityScore -= 0.5;
+  if (volRegime === 'clean_trend') qualityScore += 0.4;
+
+  // Regime strength: weakening trend = penalty (was hard block, now soft)
+  if (rs.weakening) qualityScore -= 0.4;
+  if (rs.strengthening) qualityScore += 0.3;
+
+  // 15m confirmation layer: bonus if 15m EMA stack aligned with 5m signal
+  if (tf15Data && tf15Data.closes.length >= 30) {
+    const e8_15  = ema(tf15Data.closes, 8);
+    const e21_15 = ema(tf15Data.closes, 21);
+    const n15    = tf15Data.closes.length - 1;
+    if (e8_15[n15] > e21_15[n15]) qualityScore += 0.5;  // 15m aligned bullish
+    else                            qualityScore -= 0.2;  // 15m against long signal
+  }
 
   // Divergence bonus: bullish divergence = extra quality
   const { bullDiv, bearDiv } = detectDivergence(closes);
@@ -157,6 +173,10 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   // ATR percentile for dynamic TP + volatility-adjusted sizing
   const atrPctile = atrPercentile(highs, lows, closes);
+
+  // ATR extremes = poor entry timing (quality penalty)
+  if (atrPctile > 85) qualityScore -= 0.6;  // extreme vol = whipsaw risk
+  if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;  // dead market chop
 
   // Dynamic TP: tighter in low vol, wider in high vol. Breakouts get wider TP.
   let dynTpM = asset.tpM;
@@ -184,6 +204,8 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
     atr:   ATR,
     atrPercentile: +atrPctile.toFixed(0),
     volRegime,
+    regimeStrength:      +rs.strength.toFixed(2),
+    regimeStrengthening: rs.strengthening,
     factors: { f1, f2, f3, f4, f5, f6 },
     indicators: {
       rsi: +RSI.toFixed(1), adx: +ADX.toFixed(1),
@@ -196,7 +218,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 /**
  * SHORT signal — mirror of LONG, bearish 6-factor
  */
-export function generateShortSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}, regimeData = null) {
+export function generateShortSignal(asset, closes, highs, lows, volumes, regimeOK, opts = {}, regimeData = null, tf15Data = null) {
   if (closes.length < 72) return null;
 
   const n   = closes.length - 1;
@@ -225,9 +247,9 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   // Pre-filter: below EMA50 + trending
   if (ADX < ADX_MIN || cur > e50[n]) return null;
 
-  // Volatility regime filter
+  // Volatility regime: 'volatile' hard-blocked, 'ranging' soft (quality penalty below)
   const volRegime = volatilityRegime(closes, highs, lows);
-  if (volRegime === 'volatile' || volRegime === 'ranging') return null;
+  if (volRegime === 'volatile') return null;  // hard block
 
   // ADX must be rising over 6 bars (30 min, with 5% tolerance)
   if (closes.length > 120) {
@@ -242,9 +264,8 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
     if (regimeData.closes[rn] > re8[rn]) return null;
   }
 
-  // Regime strength: skip if downtrend is weakening
+  // Regime strength: calculated for quality scoring and position sizing
   const rs = regimeStrength(closes, highs, lows);
-  if (rs.weakening) return null;
 
   // ── 6-Factor Bearish Confirmation ─────────────────────────
   const f1 = e8[n] < e13[n] && e13[n] < e21[n];  // EMA stack bear
@@ -257,6 +278,23 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   // Weighted quality score
   const W = FACTOR_WEIGHTS;
   let qualityScore = (f1?W.emaStack:0) + (f2?W.vwap:0) + (f3?W.rsi:0) + (f4?W.macd:0) + (f5?W.volume:0) + (f6?W.rsiAccel:0);
+
+  // Volatility regime quality adjustments
+  if (volRegime === 'ranging')     qualityScore -= 0.5;
+  if (volRegime === 'clean_trend') qualityScore += 0.4;
+
+  // Regime strength: weakening downtrend = penalty (was hard block, now soft)
+  if (rs.weakening) qualityScore -= 0.4;
+  if (rs.strengthening) qualityScore += 0.3;
+
+  // 15m confirmation layer: bonus if 15m EMA stack aligned with short signal
+  if (tf15Data && tf15Data.closes.length >= 30) {
+    const e8_15  = ema(tf15Data.closes, 8);
+    const e21_15 = ema(tf15Data.closes, 21);
+    const n15    = tf15Data.closes.length - 1;
+    if (e8_15[n15] < e21_15[n15]) qualityScore += 0.5;  // 15m aligned bearish
+    else                            qualityScore -= 0.2;  // 15m against short signal
+  }
 
   // Divergence bonus: bearish divergence = extra quality for short
   const { bullDiv, bearDiv } = detectDivergence(closes);
@@ -275,6 +313,10 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (conf < minConf) return null;
 
   const atrPctile = atrPercentile(highs, lows, closes);
+
+  // ATR extremes = poor entry timing
+  if (atrPctile > 85) qualityScore -= 0.6;
+  if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;
 
   // Dynamic TP
   let dynTpM = asset.tpM;
@@ -303,6 +345,8 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
     atr:   ATR,
     atrPercentile: +atrPctile.toFixed(0),
     volRegime,
+    regimeStrength:      +rs.strength.toFixed(2),
+    regimeStrengthening: rs.strengthening,
     factors: { f1, f2, f3, f4, f5, f6 },
     indicators: {
       rsi: +RSI.toFixed(1), adx: +ADX.toFixed(1),

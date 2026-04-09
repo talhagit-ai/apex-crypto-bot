@@ -9,12 +9,12 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import {
   KRAKEN_API_KEY, KRAKEN_API_SECRET,
-  ASSETS, CANDLE_INTERVAL, REGIME_INTERVAL,
+  ASSETS, CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL,
 } from './config.mjs';
 import { log } from './logger.mjs';
 
 // Kraken interval mapping (minutes → Kraken API interval value)
-const INTERVAL_MAP = { '5': 5, '60': 60 };
+const INTERVAL_MAP = { '5': 5, '15': 15, '60': 60 };
 
 /**
  * KrakenClient — wraps node-kraken-api REST + WebSocket
@@ -141,6 +141,7 @@ export class KrakenClient extends EventEmitter {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.on('open', () => {
+      const wasReconnect = this._reconnectAttempts > 0;
       this._reconnectAttempts = 0; // reset on success
       log.info('Kraken WebSocket connected');
 
@@ -151,9 +152,15 @@ export class KrakenClient extends EventEmitter {
 
       this.ws.send(JSON.stringify({
         method: 'subscribe',
+        params: { channel: 'ohlc', symbol: symbols5m, interval: 15 },
+      }));
+
+      this.ws.send(JSON.stringify({
+        method: 'subscribe',
         params: { channel: 'ohlc', symbol: symbols60m, interval: 60 },
       }));
 
+      if (wasReconnect) this.emit('reconnected'); // triggers candle gap backfill
       this.emit('ready');
     });
 

@@ -251,11 +251,20 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   const atrPctile = signal.atrPercentile || 50;
   const volMult = atrPctile > 80 ? 0.70 : atrPctile > 60 ? 0.85 : atrPctile < 20 ? 1.15 : 1.0;
 
-  // Combined risk amount
-  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult;
+  // Regime-strength sizing: strong/strengthening trend → larger size, weak → smaller
+  const rsMult = Math.max(0.6, Math.min(1.3,
+    signal.regimeStrengthening ? (signal.regimeStrength || 1.0) * 1.15
+    : (signal.regimeStrength || 1.0)
+  ));
 
-  // Account for round-trip fees
-  const feeAdjustedRisk = riskAmount - (2 * FEE_RATE * (riskAmount / slDist) * price);
+  // Combined risk amount
+  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult;
+
+  // Account for round-trip fees (BUG FIX: cap deduction at 20% — previous formula could
+  // make feeAdjustedRisk negative when slDist is small relative to notional)
+  const qty_raw  = riskAmount / slDist;
+  const feeCost  = 2 * FEE_RATE * qty_raw * price;
+  const feeAdjustedRisk = Math.max(riskAmount * 0.80, riskAmount - feeCost);
 
   // Position quantity
   let qty = Math.max(0, feeAdjustedRisk / slDist);
