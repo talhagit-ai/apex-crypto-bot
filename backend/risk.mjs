@@ -13,6 +13,11 @@ import {
   TOTAL_LOSS_LIMIT, TOTAL_PAUSE_MINUTES,
   PEAK_HOURS, OFF_PEAK_RISK_MULT,
   DYNAMIC_RISK, CORRELATION_RULES, ASSETS,
+  GROWTH_MODE, GROWTH_CONF_RISK, GROWTH_MAX_RISK_PER_TRADE,
+  GROWTH_CORRELATION_RULES,
+  GROWTH_DAILY_LOSS_LIMIT_1, GROWTH_DAILY_LOSS_LIMIT_2,
+  GROWTH_WEEKLY_LOSS_LIMIT_1, GROWTH_WEEKLY_LOSS_LIMIT_2,
+  GROWTH_KILL_SWITCH_PCT,
 } from './config.mjs';
 import { log } from './logger.mjs';
 
@@ -117,30 +122,35 @@ export function recordTradeResult(state, assetId, pnl, capital) {
   state.recentTrades.push({ win: !isLoss, pnl, assetId, time: Date.now() });
   if (state.recentTrades.length > 5) state.recentTrades.shift();
 
-  // Daily loss circuit breaker
+  // Daily loss circuit breaker (growth mode uses wider limits)
+  const DLL1 = GROWTH_MODE ? GROWTH_DAILY_LOSS_LIMIT_1  : DAILY_LOSS_LIMIT_1;
+  const DLL2 = GROWTH_MODE ? GROWTH_DAILY_LOSS_LIMIT_2  : DAILY_LOSS_LIMIT_2;
   const dailyPct = state.dailyLoss / capital;
-  if (dailyPct >= DAILY_LOSS_LIMIT_2) {
+  if (dailyPct >= DLL2) {
     state.riskReduction = 0;
-    log.warn(`CIRCUIT BREAKER: Daily loss ${(dailyPct * 100).toFixed(1)}% >= ${DAILY_LOSS_LIMIT_2 * 100}% — STOPPED 24h`);
-  } else if (dailyPct >= DAILY_LOSS_LIMIT_1) {
+    log.warn(`CIRCUIT BREAKER: Daily loss ${(dailyPct * 100).toFixed(1)}% >= ${DLL2 * 100}% — STOPPED 24h`);
+  } else if (dailyPct >= DLL1) {
     state.riskReduction = 0.5;
-    log.warn(`Daily loss ${(dailyPct * 100).toFixed(1)}% >= ${DAILY_LOSS_LIMIT_1 * 100}% — Risk reduced 50%`);
+    log.warn(`Daily loss ${(dailyPct * 100).toFixed(1)}% >= ${DLL1 * 100}% — Risk reduced 50%`);
   }
 
   // Weekly loss circuit breaker
+  const WLL1 = GROWTH_MODE ? GROWTH_WEEKLY_LOSS_LIMIT_1 : WEEKLY_LOSS_LIMIT_1;
+  const WLL2 = GROWTH_MODE ? GROWTH_WEEKLY_LOSS_LIMIT_2 : WEEKLY_LOSS_LIMIT_2;
   const weeklyPct = state.weeklyLoss / capital;
-  if (weeklyPct >= WEEKLY_LOSS_LIMIT_2) {
+  if (weeklyPct >= WLL2) {
     state.riskReduction = 0;
     log.warn(`CIRCUIT BREAKER: Weekly loss ${(weeklyPct * 100).toFixed(1)}% — STOPPED for week`);
-  } else if (weeklyPct >= WEEKLY_LOSS_LIMIT_1) {
+  } else if (weeklyPct >= WLL1) {
     state.riskReduction = Math.min(state.riskReduction, 0.5);
     log.warn(`Weekly loss ${(weeklyPct * 100).toFixed(1)}% — Risk reduced 50%`);
   }
 
   // Kill switch
-  if (capital <= state.startCapital * (1 - KILL_SWITCH_PCT)) {
+  const KSP = GROWTH_MODE ? GROWTH_KILL_SWITCH_PCT : KILL_SWITCH_PCT;
+  if (capital <= state.startCapital * (1 - KSP)) {
     state.killed = true;
-    log.error(`KILL SWITCH: Capital ${capital.toFixed(2)} below ${((1 - KILL_SWITCH_PCT) * 100).toFixed(0)}% of start — ALL TRADING STOPPED`);
+    log.error(`KILL SWITCH: Capital ${capital.toFixed(2)} below ${((1 - KSP) * 100).toFixed(0)}% of start — ALL TRADING STOPPED`);
   }
 }
 
@@ -167,8 +177,8 @@ export function canOpenPosition(state, assetId, currentPositions, now = Date.now
   // Signal cooldown after SL/TIME exit (prevent immediate re-entry into chop)
   const lastExit = state.lastExitTime?.[assetId];
   if (lastExit) {
-    const cooldownMs = lastExit.reason === 'SL' ? 30 * 60 * 1000
-                     : lastExit.reason === 'TIME' ? 15 * 60 * 1000
+    const cooldownMs = lastExit.reason === 'SL' ? (GROWTH_MODE ? 15 : 30) * 60 * 1000
+                     : lastExit.reason === 'TIME' ? (GROWTH_MODE ? 10 : 15) * 60 * 1000
                      : 0; // No cooldown after TP (trend was right)
     if (cooldownMs > 0 && now - lastExit.timestamp < cooldownMs) {
       return { allowed: false, reason: `${assetId} cooldown after ${lastExit.reason} exit` };
@@ -189,7 +199,8 @@ export function canOpenPosition(state, assetId, currentPositions, now = Date.now
   const asset = ASSETS.find(a => a.id === assetId);
   if (asset) {
     const newGroup = asset.corrGroup;
-    const rule = CORRELATION_RULES[newGroup];
+    const corrRules = GROWTH_MODE ? GROWTH_CORRELATION_RULES : CORRELATION_RULES;
+    const rule = corrRules[newGroup];
     if (rule) {
       const sameGroupCount = currentPositions.filter(p => {
         const a = ASSETS.find(x => x.id === p.assetId);
@@ -215,15 +226,19 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   const slDist = Math.abs(price - sl);
   if (slDist <= 0) return 0;
 
-  // Base risk from confidence level
-  let baseRisk = CONF_RISK[Math.min(conf, 6)] || CONF_RISK[4];
+  // Base risk from confidence level (growth mode uses Kelly-optimal sizing)
+  const riskTable = opts.growthMode ? GROWTH_CONF_RISK : CONF_RISK;
+  let baseRisk = riskTable[Math.min(conf, 6)] || riskTable[4];
 
   // Cap at max risk per trade
-  baseRisk = Math.min(baseRisk, MAX_RISK_PER_TRADE);
+  const maxRisk = opts.growthMode ? GROWTH_MAX_RISK_PER_TRADE : MAX_RISK_PER_TRADE;
+  baseRisk = Math.min(baseRisk, maxRisk);
 
-  // IMPORTANT: size based on real starting capital, not inflated internal cash.
-  // Internal cash can grow from paper wins while real account has not changed.
-  capital = Math.min(capital, state.startCapital);
+  // Growth mode: use real capital for compounding (profits increase position sizes)
+  // Safe mode: cap at startCapital to prevent paper-profit-inflated sizing
+  if (!opts.growthMode) {
+    capital = Math.min(capital, state.startCapital);
+  }
 
   // Dynamic risk scaling based on consecutive loss streak
   const streak = Math.min(state.totalConsecutiveLosses || 0, 4);

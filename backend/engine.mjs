@@ -8,6 +8,7 @@ import {
   CAPITAL, ASSETS, MAX_POS, MAX_BARS,
   PARTIAL1_R, PARTIAL1_PCT, PARTIAL2_R, PARTIAL2_PCT,
   TRAIL_R, TRAIL_ATR, MIN_CONF, MIN_RR,
+  GROWTH_TRAIL_R, GROWTH_MAX_BARS, GROWTH_MIN_RR,
 } from './config.mjs';
 import { calcATR } from './indicators.mjs';
 import { checkRegime, checkBearishRegime, generateSignal, generateShortSignal } from './signal.mjs';
@@ -37,11 +38,11 @@ export class TradingEngine {
     this.P1_PCT = p.PARTIAL1_PCT ?? PARTIAL1_PCT;
     this.P2_R   = p.PARTIAL2_R   ?? PARTIAL2_R;
     this.P2_PCT = p.PARTIAL2_PCT ?? PARTIAL2_PCT;
-    this.T_R    = p.TRAIL_R      ?? TRAIL_R;
+    this.T_R    = p.TRAIL_R      ?? (opts.growthMode ? GROWTH_TRAIL_R  : TRAIL_R);
     this.T_ATR  = p.TRAIL_ATR    ?? TRAIL_ATR;
-    this.MBARS  = p.MAX_BARS     ?? MAX_BARS;
+    this.MBARS  = p.MAX_BARS     ?? (opts.growthMode ? GROWTH_MAX_BARS : MAX_BARS);
     this.MCONF  = p.MIN_CONF     ?? MIN_CONF;
-    this.MRR    = p.MIN_RR       ?? MIN_RR;
+    this.MRR    = p.MIN_RR       ?? (opts.growthMode ? GROWTH_MIN_RR   : MIN_RR);
     // Per-asset slM/tpM overrides: { BTCUSDT: { slM, tpM }, ... }
     this.assetOverrides = p.assets || {};
   }
@@ -151,6 +152,19 @@ export class TradingEngine {
             const beLevel = isChoppy ? pos.entry : pos.originalSl + (pos.entry - pos.originalSl) * 0.5;
             if (beLevel > pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
           }
+        }
+      }
+
+      // ── Pyramid Add-On (growth mode: add 50% size to winners) ──
+      if (this.opts.growthMode && pos.partial1Taken && !pos.pyramidAdded && !isShort && pnlR >= 0.5 && pnlR < 1.5) {
+        const addQty = this._roundQty(id, pos.qty * 0.50);
+        const addCost = addQty * cur;
+        if (addQty > 0 && addCost < this.cash * 0.30) {
+          this.cash -= addCost;
+          pos.qty += addQty;
+          pos.risk = pos.qty * Math.abs(pos.entry - pos.sl);
+          pos.pyramidAdded = true;
+          this._logTrade(id, 'PYRAMID', cur, addQty, null, null, `Add-on @ ${pnlR.toFixed(1)}R`);
         }
       }
 
@@ -265,7 +279,7 @@ export class TradingEngine {
         }
 
         const rd = regimeData?.[asset.id] || b;
-        const sigOpts = { MIN_CONF: this.MCONF, MIN_RR: this.MRR };
+        const sigOpts = { MIN_CONF: this.MCONF, MIN_RR: this.MRR, growthMode: this.opts.growthMode };
         const assetCfg = this.assetOverrides[asset.id]
           ? { ...asset, ...this.assetOverrides[asset.id] }
           : asset;
@@ -328,6 +342,7 @@ export class TradingEngine {
         }
 
         const posOpts = this.opts.simMode ? { peakMult: 0.85 } : {};
+        if (this.opts.growthMode) posOpts.growthMode = true;
         const qty = calculatePositionSize(sig, availableCash, this.riskState, posOpts);
         if (qty <= 0) continue;
 

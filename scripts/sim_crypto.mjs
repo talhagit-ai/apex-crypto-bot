@@ -8,6 +8,7 @@
 import { TradingEngine } from '../backend/engine.mjs';
 import { ASSETS, CAPITAL, HISTORY_BARS } from '../backend/config.mjs';
 
+const isGrowth = process.argv.includes('--growth');
 const NUM_WEEKS = 300;
 const BARS_PER_WEEK = 288 * 7;  // 5-min bars, 24/7 = 2016 bars/week
 
@@ -67,7 +68,7 @@ function nextBar(bars, asset) {
 // ── Run Simulation ────────────────────────────────────────────
 
 function runOneWeek() {
-  const engine = new TradingEngine(CAPITAL, { simMode: true });
+  const engine = new TradingEngine(CAPITAL, { simMode: true, growthMode: isGrowth });
   const barData = {};
   for (const asset of ASSETS) {
     barData[asset.id] = initBars(asset);
@@ -117,7 +118,7 @@ function runOneWeek() {
 // ── Main ──────────────────────────────────────────────────────
 
 console.log('═══════════════════════════════════════════════════════════');
-console.log('  APEX CRYPTO V9 — SIMULATOR');
+console.log(`  APEX CRYPTO ${isGrowth ? 'V10 GROWTH' : 'V9 SAFE'} — SIMULATOR`);
 console.log(`  Capital: €${CAPITAL} | Assets: ${ASSETS.map(a => a.id).join(', ')}`);
 console.log(`  Running ${NUM_WEEKS} weekly simulations...`);
 console.log('═══════════════════════════════════════════════════════════');

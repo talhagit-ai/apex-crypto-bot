@@ -421,5 +421,37 @@ export const SERVER_PORT    = Number(process.env.PORT) || 3001;
 export const WS_PORT        = 3001;  // Same server, upgraded connection
 export const FRONTEND_PORT  = 5173;
 
+// ── Growth Mode ────────────────────────────────────────────────
+// GROWTH_MODE=true activates aggressive sizing, compounding, and wider limits
+export const GROWTH_MODE = process.env.GROWTH_MODE === 'true';
+
+// Kelly-based sizing (quarter-Kelly at 49%WR / 3:1 R:R)
+export const GROWTH_CONF_RISK = {
+  3: 0.015,   // 1.5% (was 0.8%)
+  4: 0.030,   // 3.0% (was 1.5%)
+  5: 0.050,   // 5.0% (was 2.5%) — quarter-Kelly optimal
+  6: 0.065,   // 6.5% (was 3.0%)
+};
+export const GROWTH_MAX_RISK_PER_TRADE = 0.065;
+
+// Faster exits, more trades
+export const GROWTH_TRAIL_R   = 0.8;    // was 1.2 — trail earlier
+export const GROWTH_MAX_BARS  = 36;     // was 50 — faster rotation (3h)
+export const GROWTH_MIN_RR    = 2.0;    // was 3.0 — more setups qualify
+
+// Wider circuit breakers
+export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.040;  // was 0.025
+export const GROWTH_DAILY_LOSS_LIMIT_2  = 0.060;  // was 0.040
+export const GROWTH_WEEKLY_LOSS_LIMIT_1 = 0.080;  // was 0.050
+export const GROWTH_WEEKLY_LOSS_LIMIT_2 = 0.120;  // was 0.080
+export const GROWTH_KILL_SWITCH_PCT     = 0.150;  // was 0.090
+
+// Relaxed correlation (BTC+ETH simultaneously allowed)
+export const GROWTH_CORRELATION_RULES = {
+  ...CORRELATION_RULES,
+  HIGH: { maxSimultaneous: 2 },  // BTC+ETH together
+  MED:  { maxSimultaneous: 2 },  // SOL-group
+};
+
 // ── Fee Structure (Bybit Spot) ─────────────────────────────────
 export const FEE_RATE = Number(process.env.FEE_RATE) || 0.0016; // 0.16% Kraken taker fee

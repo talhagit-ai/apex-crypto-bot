@@ -12,6 +12,7 @@ import { dirname, join } from 'path';
 import {
   ASSETS, CAPITAL, SERVER_PORT,
   CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
+  GROWTH_MODE,
 } from './config.mjs';
 import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness, getPerformanceMetrics } from './persistence.mjs';
 import { log } from './logger.mjs';
@@ -33,7 +34,7 @@ const orders  = new OrderManager(kraken);
 
 // Engine + DB initialized async in start()
 const learningEngine = new LearningEngine();
-let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, learningEngine });
+let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine });
 
 let wsClients = new Set();
 let tickCount  = 0;

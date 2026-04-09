@@ -168,8 +168,15 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6); // normalized 0-6
 
+  // Growth mode: dynamic MIN_CONF based on ADX strength
   const minConf = opts.MIN_CONF ?? MIN_CONF;
-  if (conf < minConf) return null;
+  let effectiveMinConf = minConf;
+  if (opts.growthMode && ADX > 30 && rs.strengthening) {
+    effectiveMinConf = Math.max(3, minConf - 2); // conf=3 OK in strong trends
+  } else if (opts.growthMode && ADX > 25) {
+    effectiveMinConf = Math.max(4, minConf - 1); // conf=4 OK in decent trends
+  }
+  if (conf < effectiveMinConf) return null;
 
   // ATR percentile for dynamic TP + volatility-adjusted sizing
   const atrPctile = atrPercentile(highs, lows, closes);
@@ -309,8 +316,15 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
 
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6);
 
+  // Growth mode: dynamic MIN_CONF based on ADX strength
   const minConf = opts.MIN_CONF ?? MIN_CONF;
-  if (conf < minConf) return null;
+  let effectiveMinConf = minConf;
+  if (opts.growthMode && ADX > 30 && rs.strengthening) {
+    effectiveMinConf = Math.max(3, minConf - 2);
+  } else if (opts.growthMode && ADX > 25) {
+    effectiveMinConf = Math.max(4, minConf - 1);
+  }
+  if (conf < effectiveMinConf) return null;
 
   const atrPctile = atrPercentile(highs, lows, closes);
 
