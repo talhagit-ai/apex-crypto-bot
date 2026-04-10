@@ -309,6 +309,69 @@ app.post('/api/liquidate-dust', async (_req, res) => {
   }
 });
 
+// POST /api/liquidate-orphans — sell ALL Kraken holdings not tracked by engine
+// Frees up capital stranded from previous bot sessions or failed reconciliations
+app.post('/api/liquidate-orphans', async (_req, res) => {
+  const results = [];
+  try {
+    await refreshBalances();
+    const raw = await kraken.api.balance();
+    const prices = buffer.currentPrices();
+
+    // Build lookup: assetId → krakenPair from ASSETS config
+    const pairMap = {};
+    for (const a of ASSETS) {
+      if (a.krakenPair) pairMap[a.id] = a.krakenPair;
+    }
+
+    for (const [krakenAsset, amtStr] of Object.entries(raw)) {
+      if (['ZUSD', 'ZEUR', 'USD', 'EUR'].includes(krakenAsset)) continue;
+      const amt = parseFloat(amtStr);
+      if (amt < 0.0001) continue;
+
+      const assetId = KRAKEN_ASSET_MAP[krakenAsset];
+      if (!assetId) {
+        results.push({ krakenAsset, qty: amt, ok: false, reason: 'unknown asset' });
+        continue;
+      }
+
+      // Skip if engine already tracks this position
+      if (engine.positions[assetId]) {
+        results.push({ asset: assetId, qty: amt, ok: false, reason: 'tracked by engine — skip' });
+        continue;
+      }
+
+      const price = prices[assetId] || 0;
+      const value = amt * price;
+      if (value < 1) {
+        results.push({ asset: assetId, qty: amt, value: +value.toFixed(4), ok: false, reason: 'dust (<$1)' });
+        continue;
+      }
+
+      const pair = pairMap[assetId];
+      if (!pair) {
+        results.push({ asset: assetId, qty: amt, value: +value.toFixed(2), ok: false, reason: 'no krakenPair in config' });
+        continue;
+      }
+
+      try {
+        const resp = await kraken.api.addOrder({ pair, type: 'sell', ordertype: 'market', volume: String(amt) });
+        const orderId = resp?.txid?.[0] || 'unknown';
+        results.push({ asset: assetId, qty: amt, value: +value.toFixed(2), pair, orderId, ok: true });
+        log.info(`Liquidated orphan: ${amt} ${assetId} (${pair}) $${value.toFixed(2)}`, { orderId });
+      } catch (e) {
+        results.push({ asset: assetId, qty: amt, value: +value.toFixed(2), pair, ok: false, err: e.message });
+        log.warn(`Failed to liquidate orphan ${assetId}`, { err: e.message });
+      }
+    }
+
+    setTimeout(() => refreshBalances(), 5000);
+    res.json({ ok: true, results });
+  } catch (e) {
+    res.status(500).json({ ok: false, err: e.message });
+  }
+});
+
 // ── Optimizer Endpoints ──────────────────────────────────────
 
 // Manual trigger: POST /optimize
@@ -738,6 +801,18 @@ async function reconcilePositions() {
         reportError(`Phantom LONG ${assetId} verwijderd (niet op Kraken)`);
       } else if (krakenHoldings[assetId] < pos.qty * 0.80) {
         log.warn(`RECONCILE WARNING: ${assetId} qty mismatch — engine=${pos.qty} kraken=${krakenHoldings[assetId]} (partial fill?)`);
+      }
+    }
+
+    // ── Detect untracked spot holdings (reverse orphan check) ──
+    {
+      const prices = buffer.currentPrices();
+      for (const [assetId, qty] of Object.entries(krakenHoldings)) {
+        if (engine.positions[assetId]) continue; // already managed
+        const value = qty * (prices[assetId] || 0);
+        if (value > 5) { // ignore dust < $5
+          log.warn(`ORPHAN: Kraken has ${assetId} qty=${qty} ($${value.toFixed(2)}) not tracked by engine — use POST /api/liquidate-orphans`);
+        }
       }
     }
 

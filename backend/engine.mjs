@@ -224,8 +224,10 @@ export class TradingEngine {
       }
 
       // ── Time Decay: gentle SL tightening very late in trade life (V11: veel zachter) ──
+      // V14: alleen na partial1 — voorkomt dat SL naar entry springt bij stagnante positie
+      // zonder gerealiseerde winst. TIME exit (age >= MBARS) sluit ongewijzigd af.
       const ageRatio = pos.age / this.MBARS;
-      if (ageRatio > 0.85 && !pos.partial2Taken && pnlR > 0) {
+      if (ageRatio > 0.85 && !pos.partial2Taken && pnlR > 0 && pos.partial1Taken) {
         const decayMult = 1 - ((ageRatio - 0.85) / 0.15) * 0.15; // 1.0 → 0.85 (was 1.0 → 0.5)
         if (!isShort) {
           const decaySl = pos.entry + (cur - pos.entry) * (1 - decayMult);
