@@ -142,14 +142,16 @@ export class TradingEngine {
           pos.partial1Taken = true;
           this._logTrade(id, 'PARTIAL1', cur, pqty, pnl, this.P1_R, `Partial @ ${this.P1_R}R`);
 
-          // Breakeven SL: full BE in choppy regime, half-BE in trending
+          // Breakeven SL met kussentje (V11: entry + 0.25R i.p.v. exact entry)
           const regime = this.regimes[id];
           const isChoppy = regime === 'neutral' || regime === 'bear';
+          const slDist = Math.abs(pos.entry - pos.originalSl);
+          const cushion = slDist * 0.25; // 0.25R boven/onder entry als buffer
           if (isShort) {
-            const beLevel = isChoppy ? pos.entry : pos.originalSl - (pos.originalSl - pos.entry) * 0.5;
+            const beLevel = isChoppy ? pos.entry - cushion : pos.originalSl - (pos.originalSl - pos.entry) * 0.5;
             if (beLevel < pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
           } else {
-            const beLevel = isChoppy ? pos.entry : pos.originalSl + (pos.entry - pos.originalSl) * 0.5;
+            const beLevel = isChoppy ? pos.entry + cushion : pos.originalSl + (pos.entry - pos.originalSl) * 0.5;
             if (beLevel > pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
           }
         }
@@ -204,12 +206,12 @@ export class TradingEngine {
         let trailMult = isStrongTrend && pnlR > 1.5 ? this.T_ATR * 1.3
                       : isStrongTrend ? this.T_ATR
                       : this.T_ATR * 0.8;
-        // Volatility regime adjustment
-        if (vReg === 'ranging')     trailMult *= 0.65;  // tight in chop
-        if (vReg === 'clean_trend') trailMult *= 1.25;  // wide in clean trend
-        // Age decay: tighten trail in last 30% of position life
+        // Volatility regime adjustment (V11: geïnverteerd — wider in chop, tighter in trend)
+        if (vReg === 'ranging')     trailMult *= 1.30;  // WIJDER in chop (bescherming tegen ruis)
+        if (vReg === 'clean_trend') trailMult *= 0.85;  // strakker in trend (slot winst sneller in)
+        // Age decay: gentle tightening in last 20% of position life (V11: veel zachter)
         const ageRatio2 = pos.age / this.MBARS;
-        if (ageRatio2 > 0.70) trailMult *= Math.max(0.30, 1 - (ageRatio2 - 0.70) * 1.5);
+        if (ageRatio2 > 0.80) trailMult *= Math.max(0.75, 1 - (ageRatio2 - 0.80) * 0.5);
         if (isShort) {
           const newSl = cur + ATR * trailMult;
           if (newSl < pos.sl) pos.sl = newSl;
@@ -219,10 +221,10 @@ export class TradingEngine {
         }
       }
 
-      // ── Time Decay: tighten SL as trade ages without hitting P2 ──
+      // ── Time Decay: gentle SL tightening very late in trade life (V11: veel zachter) ──
       const ageRatio = pos.age / this.MBARS;
-      if (ageRatio > 0.6 && !pos.partial2Taken && pnlR > 0) {
-        const decayMult = 1 - ((ageRatio - 0.6) / 0.4) * 0.5; // 1.0 → 0.5
+      if (ageRatio > 0.85 && !pos.partial2Taken && pnlR > 0) {
+        const decayMult = 1 - ((ageRatio - 0.85) / 0.15) * 0.15; // 1.0 → 0.85 (was 1.0 → 0.5)
         if (!isShort) {
           const decaySl = pos.entry + (cur - pos.entry) * (1 - decayMult);
           if (decaySl > pos.sl) pos.sl = decaySl;

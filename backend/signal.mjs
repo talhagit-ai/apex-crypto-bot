@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence, detectBreakout } from './indicators.mjs';
-import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX } from './config.mjs';
+import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX, VR_THRESHOLD } from './config.mjs';
 
 // ── Regime Filters ─────────────────────────────────────────────
 
@@ -131,12 +131,22 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const f2 = cur > VWAP;                           // Above VWAP
   const f3 = RSI > 42 && RSI < 68;                 // RSI sweet spot
   const f4 = MH > MH1;                             // MACD rising
-  const f5 = VR >= 1.05;                            // Volume above average (lowered for Kraken liquidity)
+  const f5 = VR >= VR_THRESHOLD;                     // Volume above average (V11: 1.15, was 1.05)
   const f6 = RSI > RSI2 && RSI2 > RSI3;           // RSI accelerating up
 
   // Weighted quality score (max = FACTOR_WEIGHT_MAX ≈ 5.0)
   const W = FACTOR_WEIGHTS;
   let qualityScore = (f1?W.emaStack:0) + (f2?W.vwap:0) + (f3?W.rsi:0) + (f4?W.macd:0) + (f5?W.volume:0) + (f6?W.rsiAccel:0);
+
+  // V11: Pullback quality — entry op pullback i.p.v. momentum chase
+  const recentLow = Math.min(...closes.slice(-7, -1).map((c, i) => {
+    const slc = closes.slice(0, closes.length - 6 + i);
+    return slc.length >= 14 ? rsi(slc, 14) : 50;
+  }));
+  // Divergence detection (used for pullback AND quality scoring)
+  const { bullDiv, bearDiv } = detectDivergence(closes);
+  if (recentLow < 40 || bullDiv) qualityScore += 0.6;  // Pullback entry = betere prijs
+  else qualityScore -= 0.3;                              // Momentum chase penalty
 
   // Volatility regime quality adjustments (ranging = penalty, clean_trend = bonus)
   if (volRegime === 'ranging')     qualityScore -= 0.5;
@@ -155,8 +165,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
     else                            qualityScore -= 0.2;  // 15m against long signal
   }
 
-  // Divergence bonus: bullish divergence = extra quality
-  const { bullDiv, bearDiv } = detectDivergence(closes);
+  // Divergence quality adjustment
   if (bullDiv) qualityScore += 0.5;
   if (bearDiv) qualityScore -= 0.3; // bearish div weakens long signal
 
@@ -168,13 +177,11 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6); // normalized 0-6
 
-  // Growth mode: dynamic MIN_CONF based on ADX strength
+  // Growth mode: dynamic MIN_CONF (V11: floor op 4, niet 3)
   const minConf = opts.MIN_CONF ?? MIN_CONF;
   let effectiveMinConf = minConf;
   if (opts.growthMode && ADX > 30 && rs.strengthening) {
-    effectiveMinConf = Math.max(3, minConf - 2); // conf=3 OK in strong trends
-  } else if (opts.growthMode && ADX > 25) {
-    effectiveMinConf = Math.max(4, minConf - 1); // conf=4 OK in decent trends
+    effectiveMinConf = Math.max(4, minConf - 1); // conf=4 minimum (was 3)
   }
   if (conf < effectiveMinConf) return null;
 
@@ -185,11 +192,10 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (atrPctile > 85) qualityScore -= 0.6;  // extreme vol = whipsaw risk
   if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;  // dead market chop
 
-  // Dynamic TP: tighter in low vol, wider in high vol. Breakouts get wider TP.
+  // Dynamic TP: breakouts get wider TP
   let dynTpM = asset.tpM;
-  if (breakout.breakout) dynTpM *= 1.20; // breakouts run further
-  if (atrPctile < 30) dynTpM *= 0.80;
-  else if (atrPctile > 70) dynTpM *= 1.15;
+  if (breakout.breakout) dynTpM *= 1.20;
+  if (atrPctile > 70) dynTpM *= 1.10;
 
   const sl    = cur - ATR_SL * asset.slM;
   const tp    = cur + ATR_SL * dynTpM;
@@ -279,12 +285,22 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const f2 = cur < VWAP;                           // Below VWAP
   const f3 = RSI > 32 && RSI < 58;                 // RSI sweet spot (symmetric with long 42-68)
   const f4 = MH < MH1;                             // MACD falling
-  const f5 = VR >= 1.05;                            // Volume above average (lowered for Kraken liquidity)
+  const f5 = VR >= VR_THRESHOLD;                     // Volume above average (V11: 1.15, was 1.05)
   const f6 = RSI < RSI2 && RSI2 < RSI3;           // RSI accelerating down
 
   // Weighted quality score
   const W = FACTOR_WEIGHTS;
   let qualityScore = (f1?W.emaStack:0) + (f2?W.vwap:0) + (f3?W.rsi:0) + (f4?W.macd:0) + (f5?W.volume:0) + (f6?W.rsiAccel:0);
+
+  // V11: Pullback quality — entry op bounce i.p.v. momentum chase (SHORT versie)
+  const recentHigh = Math.max(...closes.slice(-7, -1).map((c, i) => {
+    const slc = closes.slice(0, closes.length - 6 + i);
+    return slc.length >= 14 ? rsi(slc, 14) : 50;
+  }));
+  // Divergence detection (used for pullback AND quality scoring)
+  const { bullDiv, bearDiv } = detectDivergence(closes);
+  if (recentHigh > 60 || bearDiv) qualityScore += 0.6;  // Bounce entry = betere prijs
+  else qualityScore -= 0.3;                               // Momentum chase penalty
 
   // Volatility regime quality adjustments
   if (volRegime === 'ranging')     qualityScore -= 0.5;
@@ -303,8 +319,7 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
     else                            qualityScore -= 0.2;  // 15m against short signal
   }
 
-  // Divergence bonus: bearish divergence = extra quality for short
-  const { bullDiv, bearDiv } = detectDivergence(closes);
+  // Divergence quality adjustment
   if (bearDiv) qualityScore += 0.5;
   if (bullDiv) qualityScore -= 0.3; // bullish div weakens short signal
 
@@ -316,13 +331,11 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
 
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6);
 
-  // Growth mode: dynamic MIN_CONF based on ADX strength
+  // Growth mode: dynamic MIN_CONF (V11: floor op 4, niet 3)
   const minConf = opts.MIN_CONF ?? MIN_CONF;
   let effectiveMinConf = minConf;
   if (opts.growthMode && ADX > 30 && rs.strengthening) {
-    effectiveMinConf = Math.max(3, minConf - 2);
-  } else if (opts.growthMode && ADX > 25) {
-    effectiveMinConf = Math.max(4, minConf - 1);
+    effectiveMinConf = Math.max(4, minConf - 1); // conf=4 minimum (was 3)
   }
   if (conf < effectiveMinConf) return null;
 
@@ -332,11 +345,10 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (atrPctile > 85) qualityScore -= 0.6;
   if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;
 
-  // Dynamic TP
+  // Dynamic TP: breakouts get wider TP
   let dynTpM = asset.tpM;
-  if (breakout.breakout) dynTpM *= 1.20; // breakouts run further
-  if (atrPctile < 30) dynTpM *= 0.80;
-  else if (atrPctile > 70) dynTpM *= 1.15;
+  if (breakout.breakout) dynTpM *= 1.20;
+  if (atrPctile > 70) dynTpM *= 1.10;
 
   // Short: SL above entry, TP below entry
   const sl    = cur + ATR_SL * asset.slM;

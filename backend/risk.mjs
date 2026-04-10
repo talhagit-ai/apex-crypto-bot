@@ -275,11 +275,10 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   // Combined risk amount
   const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult;
 
-  // Account for round-trip fees (BUG FIX: cap deduction at 20% — previous formula could
-  // make feeAdjustedRisk negative when slDist is small relative to notional)
+  // Account for round-trip fees (V11: floor verlaagd van 80% naar 60% — realistischer)
   const qty_raw  = riskAmount / slDist;
   const feeCost  = 2 * FEE_RATE * qty_raw * price;
-  const feeAdjustedRisk = Math.max(riskAmount * 0.80, riskAmount - feeCost);
+  const feeAdjustedRisk = Math.max(riskAmount * 0.60, riskAmount - feeCost);
 
   // Position quantity
   let qty = Math.max(0, feeAdjustedRisk / slDist);

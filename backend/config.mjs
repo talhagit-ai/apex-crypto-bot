@@ -32,23 +32,23 @@ export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 5;          // Min 5/6 — only high-quality setups (was 3)
-export const MIN_RR     = 3.0;        // Min risk/reward 3:1 (was 2.0)
+export const MIN_RR     = 2.5;        // Min risk/reward 2.5:1 (was 3.0) — bredere stops = lagere R:R maar hogere winrate
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 0.5;      // First partial at +0.5R
-export const PARTIAL1_PCT = 0.25;     // Sell 25% of position (let 75% ride)
-export const PARTIAL2_R   = 1.0;      // Second partial at +1.0R
-export const PARTIAL2_PCT = 0.25;     // Sell 25% of remaining (18.75% original) — 56% runner
+export const PARTIAL1_R   = 1.0;      // First partial at +1.0R (was 0.5R — te vroeg, fees aten winst op)
+export const PARTIAL1_PCT = 0.20;     // Sell 20% of position (let 80% ride)
+export const PARTIAL2_R   = 2.0;      // Second partial at +2.0R (was 1.0R)
+export const PARTIAL2_PCT = 0.25;     // Sell 25% of remaining — 60% runner
 export const TRAIL_R      = 1.2;      // Start trailing at +1.2R (faster for crypto)
 export const TRAIL_ATR    = 1.5;      // Trailing stop = ATR × 1.5 (slightly wider, more room)
-export const MAX_BARS     = 50;       // Max hold time (bars) — 4.2h (was 6.7h), faster rotation for 5m entries
+export const MAX_BARS     = 72;       // Max hold time (bars) — 6h (was 4.2h) — trades meer ruimte geven
 
 // ── Risk Management ────────────────────────────────────────────
-export const DAILY_LOSS_LIMIT_1  = 0.025;  // 2.5% → reduce risk 50% (3 positions × 1.6% = 4.8% max)
-export const DAILY_LOSS_LIMIT_2  = 0.040;  // 4.0% → stop 24h
+export const DAILY_LOSS_LIMIT_1  = 0.040;  // 4.0% → reduce risk 50% (was 2.5% — te krap, 1 loss triggerde al)
+export const DAILY_LOSS_LIMIT_2  = 0.060;  // 6.0% → stop 24h (was 4.0%)
 export const WEEKLY_LOSS_LIMIT_1 = 0.050;  // 5.0% → reduce size 50%
 export const WEEKLY_LOSS_LIMIT_2 = 0.080;  // 8.0% → stop entire week
-export const KILL_SWITCH_PCT     = 0.09;   // 9% drawdown → full stop (snel beschermen)
+export const KILL_SWITCH_PCT     = 0.12;   // 12% drawdown → full stop (was 9% — te krap met bredere stops)
 export const LOSS_LIMIT          = 4;      // Consecutive losses → pause asset
 export const PAUSE_MINUTES       = 60;     // Pause duration after consecutive losses
 export const TOTAL_LOSS_LIMIT    = 6;      // 6 losses across all → pause all
@@ -71,7 +71,7 @@ export const FACTOR_WEIGHT_MAX = Object.values(FACTOR_WEIGHTS).reduce((a, b) => 
 
 // ── Regime Filter ──────────────────────────────────────────────
 export const SLOPE_BARS = 5;          // EMA50 slope lookback (5h instead of 10h — faster regime detection)
-export const ADX_MIN    = 17;         // Min ADX — trending (17 = clear directional move, not pure chop)
+export const ADX_MIN    = 22;         // Min ADX — trending (was 17, te laag: stond entries toe in vlakke markten)
 
 // ── Timeframe ──────────────────────────────────────────────────
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
@@ -107,8 +107,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
-    slM: 1.8,
-    tpM: 4.8,
+    slM: 2.4,
+    tpM: 6.0,
     minQty: 0.00001,
     qtyStep: 0.00001,
     pricePrecision: 2,
@@ -124,8 +124,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.010,
     drift: 0.00040,
-    slM: 1.5,
-    tpM: 4.2,
+    slM: 2.2,
+    tpM: 5.5,
     minQty: 0.001,
     qtyStep: 0.001,
     pricePrecision: 2,
@@ -141,8 +141,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
-    slM: 1.7,
-    tpM: 4.5,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -158,8 +158,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 1.5,
-    tpM: 4.0,
+    slM: 2.2,
+    tpM: 5.5,
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -175,8 +175,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
-    slM: 1.5,
-    tpM: 3.8,  // Was 3.4 → low vol: 3.8×0.80=3.04/1.5=2.03 > MIN_RR(2.0)
+    slM: 2.2,
+    tpM: 5.5,
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -192,8 +192,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00038,
-    slM: 1.6,
-    tpM: 4.0,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -209,8 +209,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 1.6,
-    tpM: 4.2,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -226,8 +226,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
-    slM: 1.7,
-    tpM: 4.5,
+    slM: 2.4,
+    tpM: 6.0,
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -243,8 +243,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
-    slM: 1.5,
-    tpM: 4.0,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -260,8 +260,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00040,
-    slM: 1.6,
-    tpM: 4.2,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -277,8 +277,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 1.5,
-    tpM: 4.0,
+    slM: 2.2,
+    tpM: 5.5,
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -294,8 +294,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 1.6,
-    tpM: 4.2,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -311,8 +311,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
-    slM: 1.6,
-    tpM: 4.5,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -328,8 +328,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
-    slM: 1.7,
-    tpM: 4.8,
+    slM: 2.4,
+    tpM: 6.0,
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -345,8 +345,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00038,
-    slM: 1.6,
-    tpM: 4.2,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -362,8 +362,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00038,
-    slM: 1.6,
-    tpM: 4.2,
+    slM: 2.3,
+    tpM: 5.8,
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -379,8 +379,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
-    slM: 1.7,
-    tpM: 4.5,
+    slM: 2.4,
+    tpM: 6.0,
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -398,7 +398,7 @@ export const ASSETS = [
 // ADA = SPEC correlation (~0.60)
 // DOT/LINK/AVAX/DOGE/ATOM/LTC/NEAR = ALT groups (independent slots)
 export const CORRELATION_RULES = {
-  HIGH:  { maxSimultaneous: 1 },  // BTC or ETH
+  HIGH:  { maxSimultaneous: 2 },  // BTC + ETH tegelijk (was 1 — te restrictief)
   MED:   { maxSimultaneous: 1 },  // SOL
   LOW:   { maxSimultaneous: 1 },  // XRP
   SPEC:  { maxSimultaneous: 1 },  // ADA
@@ -436,7 +436,7 @@ export const GROWTH_MAX_RISK_PER_TRADE = 0.065;
 
 // Faster exits, more trades
 export const GROWTH_TRAIL_R   = 0.8;    // was 1.2 — trail earlier
-export const GROWTH_MAX_BARS  = 36;     // was 50 — faster rotation (3h)
+export const GROWTH_MAX_BARS  = 60;     // was 36 — 5 uur (trades meer tijd voor TP)
 export const GROWTH_MIN_RR    = 2.0;    // was 3.0 — more setups qualify
 
 // Wider circuit breakers
@@ -452,6 +452,9 @@ export const GROWTH_CORRELATION_RULES = {
   HIGH: { maxSimultaneous: 2 },  // BTC+ETH together
   MED:  { maxSimultaneous: 2 },  // SOL-group
 };
+
+// ── Volume Threshold ──────────────────────────────────────────
+export const VR_THRESHOLD = 1.15;  // Volume ratio minimum (was hardcoded 1.05 — te laag)
 
 // ── Fee Structure (Bybit Spot) ─────────────────────────────────
 export const FEE_RATE = Number(process.env.FEE_RATE) || 0.0016; // 0.16% Kraken taker fee
