@@ -13,9 +13,21 @@
 export function ema(arr, n) {
   const k = 2 / (n + 1);
   const out = new Float64Array(arr.length);
-  out[0] = arr[0];
-  for (let i = 1; i < arr.length; i++) {
-    out[i] = arr[i] * k + out[i - 1] * (1 - k);
+  // V12: SMA warmup voor eerste N waarden (voorkomt initialisatie-bias)
+  if (arr.length >= n) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += arr[i];
+    out[0] = arr[0]; // fill prefix
+    for (let i = 1; i < n; i++) out[i] = arr[i] * k + out[i - 1] * (1 - k);
+    out[n - 1] = sum / n; // seed EMA met SMA
+    for (let i = n; i < arr.length; i++) {
+      out[i] = arr[i] * k + out[i - 1] * (1 - k);
+    }
+  } else {
+    out[0] = arr[0];
+    for (let i = 1; i < arr.length; i++) {
+      out[i] = arr[i] * k + out[i - 1] * (1 - k);
+    }
   }
   return out;
 }

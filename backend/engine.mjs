@@ -28,6 +28,8 @@ export class TradingEngine {
     this.riskState = createRiskState(capital);
     this.tickCount = 0;
     this.regimes = {};
+    this._regimeRaw = {};    // V12: raw regime per tick (voor hysteresis)
+    this._regimeCount = {};  // V12: consecutive ticks in same regime
     this.opts = opts;            // { simMode: true } disables time-based features
     this.simTime = Date.now();   // Simulated clock (advanced 5min per tick in simMode)
     this.learningEngine = opts.learningEngine || null; // Self-learning engine
@@ -69,7 +71,7 @@ export class TradingEngine {
         unrealized += pos.qty * price;
       }
     }
-    return this.cash + unrealized;
+    return Math.max(0, this.cash + unrealized); // V12: equity floor — voorkom negatieve equity
   }
 
   /**
@@ -289,7 +291,9 @@ export class TradingEngine {
         // ── Try LONG ──────────────────────────────────────────
         const bullRegime = checkRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         const d15 = tf15Data?.[asset.id] || null;
-        if (bullRegime) {
+        // V12: gebruik confirmed regime (hysteresis) voor entries, niet raw
+        const confirmedRegime = this.regimes[asset.id];
+        if (bullRegime && confirmedRegime === 'bull') {
           const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
           if (sig) {
             // Self-learning: adjust quality based on historical performance
@@ -306,7 +310,7 @@ export class TradingEngine {
 
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
-        if (bearRegime && this.opts.enableShorts) {
+        if (bearRegime && confirmedRegime === 'bear' && this.opts.enableShorts) {
           const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
           if (sig) {
             if (this.learningEngine) {
@@ -320,7 +324,18 @@ export class TradingEngine {
           }
         }
 
-        this.regimes[asset.id] = bullRegime ? 'bull' : bearRegime ? 'bear' : 'neutral';
+        // V12: Regime hysteresis — regime mag pas wisselen na 3 opeenvolgende bars
+        const rawRegime = bullRegime ? 'bull' : bearRegime ? 'bear' : 'neutral';
+        const prevRaw = this._regimeRaw[asset.id];
+        if (rawRegime === prevRaw) {
+          this._regimeCount[asset.id] = (this._regimeCount[asset.id] || 0) + 1;
+        } else {
+          this._regimeCount[asset.id] = 1;
+        }
+        this._regimeRaw[asset.id] = rawRegime;
+        if (this._regimeCount[asset.id] >= 3 || !this.regimes[asset.id]) {
+          this.regimes[asset.id] = rawRegime;
+        }
 
         if (!bullRegime && !bearRegime) {
           log.info(`Skip ${asset.id}: geen trend (noch bull noch bear)`);

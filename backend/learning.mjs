@@ -237,21 +237,21 @@ export class LearningEngine {
 
     // 3. Hour (granular, only use once we have enough data)
     const hp = this.profiles.byHour?.[hourUTC];
-    if (hp && hp.count >= 4) {
+    if (hp && hp.count >= 10) {
       if      (hp.avgPnl  < -0.3) score *= 0.88;
       else if (hp.winRate >  0.62) score *= 1.10;
     }
 
     // 4. Macro regime performance
     const rp = this.profiles.byRegime?.[regime];
-    if (rp && rp.count >= 3) {
+    if (rp && rp.count >= 8) {
       if      (rp.winRateLower < 0.22) score *= 0.68;
       else if (rp.winRate      > 0.58) score *= 1.12;
     }
 
     // 5. Volatility regime
     const vp = this.profiles.byVolReg?.[volRegime];
-    if (vp && vp.count >= 3) {
+    if (vp && vp.count >= 8) {
       if      (vp.winRate < 0.35) score *= 0.82;
       else if (vp.winRate > 0.58) score *= 1.10;
     }
@@ -264,7 +264,7 @@ export class LearningEngine {
       for (const [key, active] of Object.entries(factors)) {
         if (!active) continue;
         const rf = rMatrix?.[key];
-        if (rf && rf.count >= 4) {
+        if (rf && rf.count >= 10) {
           if      (rf.winRate > 0.68) score *= 1.10;
           else if (rf.winRate < 0.28) score *= 0.90;
         } else if (fc?.[key]) {
@@ -280,7 +280,7 @@ export class LearningEngine {
         for (let i = 0; i < activeKeys.length; i++) {
           for (let j = i + 1; j < activeKeys.length; j++) {
             const pair = fi[`${activeKeys[i]}+${activeKeys[j]}`];
-            if (pair && pair.count >= 4) {
+            if (pair && pair.count >= 10) {
               if      (pair.winRate > 0.68) score *= 1.07;
               else if (pair.winRate < 0.28) score *= 0.94;
             }
@@ -312,7 +312,7 @@ export class LearningEngine {
       .sort((a, b) => b.winCorr - a.winCorr);
 
     const interactions = Object.entries(this.profiles.byFactorInteraction || {})
-      .filter(([, p]) => p.count >= 3)
+      .filter(([, p]) => p.count >= 8)
       .map(([pair, p]) => ({ pair, winRate: +p.winRate.toFixed(2), count: p.count }))
       .sort((a, b) => b.winRate - a.winRate)
       .slice(0, 5);

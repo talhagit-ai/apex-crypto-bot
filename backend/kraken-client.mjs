@@ -33,7 +33,7 @@ export class KrakenClient extends EventEmitter {
     });
     this.ws = null;
     this._lastBars = {};       // `${symbol}-${interval}` → last seen bar (for close detection)
-    this._emittedCloses = new Set(); // dedup guard: `${assetId}-${interval}-${ts}`
+    this._emittedCloses = new Map(); // V12: dedup guard met timestamps: key → emitTime
   }
 
   // ── REST ──────────────────────────────────────────────────────
@@ -215,11 +215,14 @@ export class KrakenClient extends EventEmitter {
         // Dedup: skip if we already emitted this closed bar (guards against double-WS)
         const closeKey = `${asset.id}-${interval}-${closedTs}`;
         if (this._emittedCloses.has(closeKey)) continue;
-        this._emittedCloses.add(closeKey);
-        // Keep set bounded (max 500 entries)
-        if (this._emittedCloses.size > 500) {
-          const first = this._emittedCloses.values().next().value;
-          this._emittedCloses.delete(first);
+        this._emittedCloses.set(closeKey, Date.now());
+        // V12: verwijder entries ouder dan 6 uur (was: vaste 500-item limiet)
+        const SIX_HOURS = 6 * 60 * 60 * 1000;
+        if (this._emittedCloses.size > 200) {
+          const now = Date.now();
+          for (const [k, ts] of this._emittedCloses) {
+            if (now - ts > SIX_HOURS) this._emittedCloses.delete(k);
+          }
         }
 
         const closedCandle = {

@@ -162,6 +162,11 @@ export class OrderManager {
         if (order && order.orderStatus === 'Filled') {
           return Number(order.avgPrice) || fallbackPrice;
         }
+        // V12: partial fill handling — log en retourneer beschikbare prijs
+        if (order && order.orderStatus === 'PartiallyFilled') {
+          log.warn(`Order ${orderId} partially filled — using available price`);
+          return Number(order.avgPrice) || fallbackPrice;
+        }
         if (order && ['Cancelled', 'Rejected'].includes(order.orderStatus)) {
           log.warn(`Order ${orderId} was ${order.orderStatus}`);
           return null;

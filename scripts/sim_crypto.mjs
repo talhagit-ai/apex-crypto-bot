@@ -6,7 +6,10 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { TradingEngine } from '../backend/engine.mjs';
-import { ASSETS, CAPITAL, HISTORY_BARS } from '../backend/config.mjs';
+import { ASSETS, CAPITAL, HISTORY_BARS, FEE_RATE } from '../backend/config.mjs';
+
+// V12: simuleer realistische spread/slippage (0.05%)
+const SPREAD = 0.0005;
 
 const isGrowth = process.argv.includes('--growth');
 const NUM_WEEKS = 300;
@@ -90,10 +93,11 @@ function runOneWeek() {
     engine.tick(barData, barData, barData);
   }
 
-  // Force close any remaining positions at market
+  // Force close any remaining positions at market (V12: met spread)
   const currentPrices = {};
   for (const asset of ASSETS) {
-    currentPrices[asset.id] = barData[asset.id].closes[barData[asset.id].closes.length - 1];
+    const raw = barData[asset.id].closes[barData[asset.id].closes.length - 1];
+    currentPrices[asset.id] = raw * (1 - SPREAD); // sell @ bid (slippage)
   }
   for (const [id, pos] of Object.entries(engine.positions)) {
     engine._closePosition(id, currentPrices[id], 'EOW');

@@ -115,6 +115,16 @@ export class CandleBuffer {
   }
 
   /**
+   * V12: Check of een asset stale is (>30 min geen update)
+   */
+  isStale(assetId, interval = CANDLE_INTERVAL) {
+    const buf = this.buffers[assetId]?.[interval];
+    if (!buf || buf.timestamps.length === 0) return true;
+    const lastTs = buf.timestamps[buf.timestamps.length - 1];
+    return Date.now() - lastTs > 30 * 60 * 1000;
+  }
+
+  /**
    * Get all current prices (for equity calculation)
    */
   currentPrices() {
@@ -135,7 +145,7 @@ export class CandleBuffer {
     for (const asset of ASSETS) {
       for (const interval of intervals) {
         try {
-          const klines = await this.client.getKlines(asset.symbol, interval, 10);
+          const klines = await this.client.getKlines(asset.krakenPair || asset.symbol, interval, 50);
           for (const k of klines) {
             this.update(asset.id, interval, {
               timestamp: Number(k[0]),
@@ -161,7 +171,7 @@ export class CandleBuffer {
     const bars = { closes: [], highs: [], lows: [], volumes: [], timestamps: [] };
 
     try {
-      const klines = await this.client.getKlines(asset.symbol, interval, limit);
+      const klines = await this.client.getKlines(asset.krakenPair || asset.symbol, interval, limit);
 
       // Kraken returns oldest first — already chronological (no reverse needed)
       const sorted = klines.slice();

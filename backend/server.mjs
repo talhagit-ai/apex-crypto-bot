@@ -316,6 +316,17 @@ app.post('/optimize', async (_req, res) => {
   log.info('Manual optimization triggered via REST');
   try {
     const result = await runOptimization();
+    // V12: live reload engine met nieuwe params na optimalisatie
+    const newParams = await loadParams();
+    if (newParams._meta) {
+      engine = new TradingEngine(engine.capital, {
+        overrideParams: newParams,
+        enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS,
+        growthMode: GROWTH_MODE,
+        learningEngine,
+      });
+      log.info('Engine reloaded with new optimizer params');
+    }
     res.json(result);
   } catch (err) {
     log.error('Optimization error', { err: err.message });
@@ -374,7 +385,9 @@ function broadcast(type, data) {
   const msg = JSON.stringify({ type, data });
   for (const ws of wsClients) {
     if (ws.readyState === 1) { // OPEN
-      ws.send(msg);
+      ws.send(msg, (err) => { // V12: non-blocking met error callback
+        if (err) { wsClients.delete(ws); }
+      });
     }
   }
 }
@@ -416,11 +429,15 @@ function onBarClose(assetId, interval, candle) {
   }
 }
 
+let tickInFlight = false; // V12: reentrancy guard tegen dubbele orders
 async function runEngineTick() {
+  if (tickInFlight) { log.warn('Tick skipped: previous tick still running'); return; }
   if (!buffer.ready) {
     log.warn('Engine tick skipped: buffer not ready');
     return;
   }
+  tickInFlight = true;
+  try {
   tickCount++;
   lastFallbackCheck = Date.now();
 
@@ -450,6 +467,13 @@ async function runEngineTick() {
   const isDryRun = process.env.DRY_RUN === 'true';
   engine.tick(barData, regimeData, tf15Data);
 
+  // V12: Save state BEFORE orders — als bot crasht na order, weet engine van de positie
+  saveEngineState({
+    positions: engine.positions,
+    cash:      engine.cash,
+    riskState: engine.riskState,
+  }).catch(() => {});
+
   // Detect changes and place real orders (or log in DRY_RUN mode)
   await _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun);
 
@@ -471,7 +495,7 @@ async function runEngineTick() {
     checkFuturesReadiness();
   }
 
-  // Save engine state after every tick (survive restarts)
+  // V12: state al opgeslagen vóór orders (hierboven) — opnieuw opslaan na orders voor final state
   saveEngineState({
     positions: engine.positions,
     cash:      engine.cash,
@@ -483,6 +507,7 @@ async function runEngineTick() {
     equity: state.equity,
     cash: state.cash,
   });
+  } finally { tickInFlight = false; } // V12: reentrancy guard
 }
 
 /**
@@ -706,10 +731,13 @@ async function reconcilePositions() {
     for (const [assetId, pos] of Object.entries(engine.positions)) {
       if (pos.side === 'short') continue;
       if (pos.paperOnly) continue; // paper-tracked position — not on Kraken
-      if (!krakenHoldings[assetId] || krakenHoldings[assetId] < pos.qty * 0.5) {
+      if (!krakenHoldings[assetId] || krakenHoldings[assetId] < pos.qty * 0.20) {
+        // V12: alleen verwijderen bij <20% (was 50%). Bij 20-80% loggen als waarschuwing.
         log.warn(`RECONCILE: Engine has LONG ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
         _rollbackPosition(assetId, pos);
         reportError(`Phantom LONG ${assetId} verwijderd (niet op Kraken)`);
+      } else if (krakenHoldings[assetId] < pos.qty * 0.80) {
+        log.warn(`RECONCILE WARNING: ${assetId} qty mismatch — engine=${pos.qty} kraken=${krakenHoldings[assetId]} (partial fill?)`);
       }
     }
 
@@ -764,6 +792,18 @@ function _rollbackPosition(assetId, pos) {
 
 // ── Startup ───────────────────────────────────────────────────
 
+// V12: retry helper voor startup
+async function withRetry(fn, name, attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try { return await fn(); }
+    catch (e) {
+      log.error(`${name} failed (attempt ${i}/${attempts})`, { err: e.message });
+      if (i === attempts) throw e;
+      await new Promise(r => setTimeout(r, 5000 * i));
+    }
+  }
+}
+
 async function start() {
   log.info('═══════════════════════════════════════════════════════════');
   log.info('  APEX CRYPTO V2 — STARTING (Kraken)');
@@ -772,7 +812,7 @@ async function start() {
   log.info('═══════════════════════════════════════════════════════════');
 
   // 0. Initialize database (Turso or local SQLite)
-  await initDB();
+  await withRetry(() => initDB(), 'initDB');
 
   // Load optimizer params from DB (overrides defaults)
   const savedParams = await loadParams();
@@ -811,7 +851,7 @@ async function start() {
   }
 
   // 1. Fetch real Kraken balances
-  await refreshBalances();
+  await withRetry(() => refreshBalances(), 'refreshBalances');
   if (realBalances.spotUSD > 0) {
     log.info(`Real Kraken balance: total $${realBalances.spotUSD.toFixed(2)}, cash $${(realBalances.spotCash || 0).toFixed(2)}`);
     // capital = total portfolio (for equity display)
@@ -840,7 +880,7 @@ async function start() {
   setInterval(reconcilePositions, 5 * 60_000);
 
   // 2. Fetch historical data
-  await buffer.init();
+  await withRetry(() => buffer.init(), 'buffer.init');
 
   // 3. Connect Kraken WebSocket streams
   kraken.connectWebSocket(onBarClose);
