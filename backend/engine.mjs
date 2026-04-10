@@ -333,7 +333,7 @@ export class TradingEngine {
           this._regimeCount[asset.id] = 1;
         }
         this._regimeRaw[asset.id] = rawRegime;
-        if (this._regimeCount[asset.id] >= 3 || !this.regimes[asset.id]) {
+        if (this._regimeCount[asset.id] >= 2 || !this.regimes[asset.id]) { // V13: was 3
           this.regimes[asset.id] = rawRegime;
         }
 

@@ -145,8 +145,8 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   }));
   // Divergence detection (used for pullback AND quality scoring)
   const { bullDiv, bearDiv } = detectDivergence(closes);
-  if (recentLow < 40 || bullDiv) qualityScore += 0.6;  // Pullback entry = betere prijs
-  else qualityScore -= 0.3;                              // Momentum chase penalty
+  if (recentLow < 40 || bullDiv) qualityScore += 0.4;  // V13: pullback bonus (verlaagd van 0.6)
+  // V13: momentum penalty verwijderd — in trending markten is momentum entry vaak correct
 
   // Volatility regime quality adjustments (ranging = penalty, clean_trend = bonus)
   if (volRegime === 'ranging')     qualityScore -= 0.5;
@@ -299,8 +299,8 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   }));
   // Divergence detection (used for pullback AND quality scoring)
   const { bullDiv, bearDiv } = detectDivergence(closes);
-  if (recentHigh > 60 || bearDiv) qualityScore += 0.6;  // Bounce entry = betere prijs
-  else qualityScore -= 0.3;                               // Momentum chase penalty
+  if (recentHigh > 60 || bearDiv) qualityScore += 0.4;  // V13: bounce bonus (verlaagd van 0.6)
+  // V13: momentum penalty verwijderd
 
   // Volatility regime quality adjustments
   if (volRegime === 'ranging')     qualityScore -= 0.5;

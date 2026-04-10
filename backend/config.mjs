@@ -27,20 +27,20 @@ export const MODE             = process.env.MODE || 'spot';
 
 // ── Capital & Position ─────────────────────────────────────────
 export const CAPITAL    = Number(process.env.CAPITAL) || 100;
-export const MAX_POS    = 5;          // Max concurrent positions — verhoog mee als kapitaal groeit
-export const MAX_DEPLOY = 0.80;       // Never deploy >80% of capital
+export const MAX_POS    = 3;          // V13: realistisch voor €100 (was 5 — onhaalbaar met €100)
+export const MAX_DEPLOY = 0.92;       // V13: benut meer kapitaal (was 0.80)
 
 // ── Signal Requirements ────────────────────────────────────────
-export const MIN_CONF   = 5;          // Min 5/6 — only high-quality setups (was 3)
-export const MIN_RR     = 2.5;        // Min risk/reward 2.5:1 (was 3.0) — bredere stops = lagere R:R maar hogere winrate
+export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
+export const MIN_RR     = 2.0;        // V13: 2:1 R:R (was 2.5) — meer setups kwalificeren
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 1.0;      // First partial at +1.0R (was 0.5R — te vroeg, fees aten winst op)
-export const PARTIAL1_PCT = 0.20;     // Sell 20% of position (let 80% ride)
-export const PARTIAL2_R   = 2.0;      // Second partial at +2.0R (was 1.0R)
-export const PARTIAL2_PCT = 0.25;     // Sell 25% of remaining — 60% runner
-export const TRAIL_R      = 1.2;      // Start trailing at +1.2R (faster for crypto)
-export const TRAIL_ATR    = 1.5;      // Trailing stop = ATR × 1.5 (slightly wider, more room)
+export const PARTIAL1_R   = 0.75;     // V13: snellere eerste winst (was 1.0R)
+export const PARTIAL1_PCT = 0.25;     // V13: pak 25% (was 20%)
+export const PARTIAL2_R   = 1.5;      // V13: tweede partial eerder (was 2.0R)
+export const PARTIAL2_PCT = 0.20;     // V13: minder van runner (was 25%) — 55% runner
+export const TRAIL_R      = 1.2;      // Start trailing at +1.2R
+export const TRAIL_ATR    = 2.0;      // V13: bredere trail (was 1.5) — winnaars doorlopen
 export const MAX_BARS     = 72;       // Max hold time (bars) — 6h (was 4.2h) — trades meer ruimte geven
 
 // ── Risk Management ────────────────────────────────────────────
@@ -71,7 +71,7 @@ export const FACTOR_WEIGHT_MAX = Object.values(FACTOR_WEIGHTS).reduce((a, b) => 
 
 // ── Regime Filter ──────────────────────────────────────────────
 export const SLOPE_BARS = 5;          // EMA50 slope lookback (5h instead of 10h — faster regime detection)
-export const ADX_MIN    = 22;         // Min ADX — trending (was 17, te laag: stond entries toe in vlakke markten)
+export const ADX_MIN    = 19;         // V13: mildere trends toelaten (was 22 — te streng)
 
 // ── Timeframe ──────────────────────────────────────────────────
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
@@ -427,17 +427,17 @@ export const GROWTH_MODE = process.env.GROWTH_MODE === 'true';
 
 // Kelly-based sizing (quarter-Kelly at 49%WR / 3:1 R:R)
 export const GROWTH_CONF_RISK = {
-  3: 0.015,   // 1.5% (was 0.8%)
-  4: 0.030,   // 3.0% (was 1.5%)
-  5: 0.050,   // 5.0% (was 2.5%) — quarter-Kelly optimal
-  6: 0.065,   // 6.5% (was 3.0%)
+  3: 0.020,   // V13: 2.0% (was 1.5%)
+  4: 0.040,   // V13: 4.0% (was 3.0%) — primaire entry level
+  5: 0.060,   // V13: 6.0% (was 5.0%)
+  6: 0.075,   // V13: 7.5% (was 6.5%) — full Kelly bij perfecte setup
 };
-export const GROWTH_MAX_RISK_PER_TRADE = 0.065;
+export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
 
 // Faster exits, more trades
-export const GROWTH_TRAIL_R   = 0.8;    // was 1.2 — trail earlier
-export const GROWTH_MAX_BARS  = 60;     // was 36 — 5 uur (trades meer tijd voor TP)
-export const GROWTH_MIN_RR    = 2.0;    // was 3.0 — more setups qualify
+export const GROWTH_TRAIL_R   = 0.5;    // V13: begin trail eerder (was 0.8)
+export const GROWTH_MAX_BARS  = 60;     // 5 uur
+export const GROWTH_MIN_RR    = 1.8;    // V13: meer setups (was 2.0)
 
 // Wider circuit breakers
 export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.040;  // was 0.025
@@ -454,7 +454,7 @@ export const GROWTH_CORRELATION_RULES = {
 };
 
 // ── Volume Threshold ──────────────────────────────────────────
-export const VR_THRESHOLD = 1.15;  // Volume ratio minimum (was hardcoded 1.05 — te laag)
+export const VR_THRESHOLD = 1.10;  // V13: versoepeld (was 1.15 — te streng)
 
 // ── Fee Structure (Bybit Spot) ─────────────────────────────────
 export const FEE_RATE = Number(process.env.FEE_RATE) || 0.0016; // 0.16% Kraken taker fee
