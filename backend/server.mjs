@@ -14,7 +14,7 @@ import {
   CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
   GROWTH_MODE,
 } from './config.mjs';
-import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness, getPerformanceMetrics } from './persistence.mjs';
+import { initDB, closeDB, saveEquitySnapshot, getOptimizerHistory, saveEngineState, loadEngineState, saveFuturesReadiness, loadFuturesReadiness, getPerformanceMetrics, saveState } from './persistence.mjs';
 import { log } from './logger.mjs';
 import { TradingEngine } from './engine.mjs';
 import { KrakenClient } from './kraken-client.mjs';
@@ -891,9 +891,14 @@ async function start() {
 
   // Load optimizer params from DB (overrides defaults)
   const savedParams = await loadParams();
-  if (savedParams._meta) {
-    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, learningEngine });
-    log.info('Loaded optimizer params from DB', savedParams._meta);
+  // V16: Clear stale optimizer params — oude tpM=5.5-6.0 en MAX_BARS=40 zijn niet meer geldig
+  if (savedParams && savedParams._meta && !savedParams._v16) {
+    log.info('V16: Clearing stale optimizer params from DB (old tpM/MAX_BARS values)');
+    await saveState('params', null);
+    // Engine gebruikt nu nieuwe DEFAULT_PARAMS uit optimizer.mjs (met _v16 flag)
+  } else if (savedParams && savedParams._v16) {
+    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine });
+    log.info('Loaded V16 optimizer params from DB', savedParams._meta);
   }
 
   // Restore engine state if recent (< 30 min old)

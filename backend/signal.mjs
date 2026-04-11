@@ -103,9 +103,9 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   if (ADX < ADX_MIN) return null;
 
-  // Volatility regime: 'volatile' still hard-blocked (too dangerous), 'ranging' is soft
+  // V16: volatile is nu een quality penalty, niet een hard block
+  // Data toont: TP wordt vaker bereikt in volatile markten (prijs beweegt daadwerkelijk)
   const volRegime = volatilityRegime(closes, highs, lows);
-  if (volRegime === 'volatile') return null;  // hard block: extreme vol = whipsaw
 
   // ADX must not be collapsing: allow up to 20% decline over 30 min (5% was too strict —
   // in slow bull grind, 5m ADX oscillates and was blocking all signals for 18+ hours)
@@ -150,6 +150,7 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   // Volatility regime quality adjustments (ranging = penalty, clean_trend = bonus)
   if (volRegime === 'ranging')     qualityScore -= 0.5;
+  if (volRegime === 'volatile')    qualityScore -= 0.8;  // V16: penalty i.p.v. hard block
   if (volRegime === 'clean_trend') qualityScore += 0.4;
 
   // Regime strength: weakening trend = penalty (was hard block, now soft)
@@ -260,9 +261,8 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   // Pre-filter: below EMA50 + trending
   if (ADX < ADX_MIN || cur > e50[n]) return null;
 
-  // Volatility regime: 'volatile' hard-blocked, 'ranging' soft (quality penalty below)
+  // V16: volatile is nu een quality penalty, niet een hard block
   const volRegime = volatilityRegime(closes, highs, lows);
-  if (volRegime === 'volatile') return null;  // hard block
 
   // ADX must not be collapsing: allow up to 20% decline (same as long signal)
   if (closes.length > 120) {
@@ -304,6 +304,7 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
 
   // Volatility regime quality adjustments
   if (volRegime === 'ranging')     qualityScore -= 0.5;
+  if (volRegime === 'volatile')    qualityScore -= 0.8;  // V16: penalty i.p.v. hard block
   if (volRegime === 'clean_trend') qualityScore += 0.4;
 
   // Regime strength: weakening downtrend = penalty (was hard block, now soft)

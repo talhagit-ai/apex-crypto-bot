@@ -18,6 +18,8 @@ import {
   GROWTH_DAILY_LOSS_LIMIT_1, GROWTH_DAILY_LOSS_LIMIT_2,
   GROWTH_WEEKLY_LOSS_LIMIT_1, GROWTH_WEEKLY_LOSS_LIMIT_2,
   GROWTH_KILL_SWITCH_PCT,
+  SESSION_FILTER_ENABLED, SESSION_ALLOWED_START, SESSION_ALLOWED_END,
+  COOLDOWN_SL_MIN, COOLDOWN_TIME_MIN,
 } from './config.mjs';
 import { log } from './logger.mjs';
 
@@ -164,6 +166,14 @@ export function canOpenPosition(state, assetId, currentPositions, now = Date.now
   // Risk reduction = 0 means circuit breaker stopped trading
   if (state.riskReduction === 0) return { allowed: false, reason: 'Circuit breaker active' };
 
+  // V16: Session filter — alleen traden tijdens winstgevende Europa sessie
+  if (SESSION_FILTER_ENABLED) {
+    const hourUTC = new Date(now).getUTCHours();
+    if (hourUTC < SESSION_ALLOWED_START || hourUTC >= SESSION_ALLOWED_END) {
+      return { allowed: false, reason: `Outside session (${SESSION_ALLOWED_START}-${SESSION_ALLOWED_END} UTC)` };
+    }
+  }
+
   // All-asset pause
   if (now < state.allPausedUntil) {
     return { allowed: false, reason: 'All trading paused after consecutive losses' };
@@ -177,8 +187,9 @@ export function canOpenPosition(state, assetId, currentPositions, now = Date.now
   // Signal cooldown after SL/TIME exit (prevent immediate re-entry into chop)
   const lastExit = state.lastExitTime?.[assetId];
   if (lastExit) {
-    const cooldownMs = lastExit.reason === 'SL' ? (GROWTH_MODE ? 15 : 30) * 60 * 1000
-                     : lastExit.reason === 'TIME' ? (GROWTH_MODE ? 10 : 15) * 60 * 1000
+    // V16: cooldowns verkort (was 30/15 min — 6% van EU window verspild)
+    const cooldownMs = lastExit.reason === 'SL' ? (GROWTH_MODE ? 5 : COOLDOWN_SL_MIN) * 60 * 1000
+                     : lastExit.reason === 'TIME' ? (GROWTH_MODE ? 3 : COOLDOWN_TIME_MIN) * 60 * 1000
                      : 0; // No cooldown after TP (trend was right)
     if (cooldownMs > 0 && now - lastExit.timestamp < cooldownMs) {
       return { allowed: false, reason: `${assetId} cooldown after ${lastExit.reason} exit` };

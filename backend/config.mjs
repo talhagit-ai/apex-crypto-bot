@@ -32,23 +32,23 @@ export const MAX_DEPLOY = 0.92;       // V13: benut meer kapitaal (was 0.80)
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
-export const MIN_RR     = 2.0;        // V13: 2:1 R:R (was 2.5) — meer setups kwalificeren
+export const MIN_RR     = 1.5;        // V16: 1.5:1 R:R (was 2.0) — past bij nieuwe tpM/slM ratio
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 0.75;     // V13: snellere eerste winst (was 1.0R)
-export const PARTIAL1_PCT = 0.25;     // V13: pak 25% (was 20%)
-export const PARTIAL2_R   = 1.5;      // V13: tweede partial eerder (was 2.0R)
-export const PARTIAL2_PCT = 0.20;     // V13: minder van runner (was 25%) — 55% runner
-export const TRAIL_R      = 1.2;      // Start trailing at +1.2R
+export const PARTIAL1_R   = 0.5;      // V16: eerste winst bij 0.5R (was 0.75 — eerder cash vrijmaken)
+export const PARTIAL1_PCT = 0.30;     // V16: pak 30% (was 25%)
+export const PARTIAL2_R   = 1.0;      // V16: tweede partial bij 1.0R (was 1.5 — met lagere tpM is dit de halfway)
+export const PARTIAL2_PCT = 0.20;     // behouden
+export const TRAIL_R      = 0.8;      // V16: begin trail bij 0.8R (was 1.2 — eerder winst veiligstellen)
 export const TRAIL_ATR    = 2.0;      // V13: bredere trail (was 1.5) — winnaars doorlopen
 export const MAX_BARS     = 72;       // Max hold time (bars) — 6h (was 4.2h) — trades meer ruimte geven
 
 // ── Risk Management ────────────────────────────────────────────
-export const DAILY_LOSS_LIMIT_1  = 0.040;  // 4.0% → reduce risk 50% (was 2.5% — te krap, 1 loss triggerde al)
-export const DAILY_LOSS_LIMIT_2  = 0.060;  // 6.0% → stop 24h (was 4.0%)
-export const WEEKLY_LOSS_LIMIT_1 = 0.050;  // 5.0% → reduce size 50%
-export const WEEKLY_LOSS_LIMIT_2 = 0.080;  // 8.0% → stop entire week
-export const KILL_SWITCH_PCT     = 0.12;   // 12% drawdown → full stop (was 9% — te krap met bredere stops)
+export const DAILY_LOSS_LIMIT_1  = 0.060;  // V16: 6% → reduce risk 50% (was 4% — 2 trades triggerde al met €200)
+export const DAILY_LOSS_LIMIT_2  = 0.100;  // V16: 10% → stop 24h (was 6% — te krap voor crypto)
+export const WEEKLY_LOSS_LIMIT_1 = 0.080;  // V16: 8% → reduce size 50% (was 5%)
+export const WEEKLY_LOSS_LIMIT_2 = 0.150;  // V16: 15% → stop entire week (was 8%)
+export const KILL_SWITCH_PCT     = 0.20;   // V16: 20% drawdown → full stop (was 12%)
 export const LOSS_LIMIT          = 4;      // Consecutive losses → pause asset
 export const PAUSE_MINUTES       = 60;     // Pause duration after consecutive losses
 export const TOTAL_LOSS_LIMIT    = 6;      // 6 losses across all → pause all
@@ -87,6 +87,15 @@ export const PEAK_HOURS = [
 ];
 export const OFF_PEAK_RISK_MULT = 0.85; // 85% risk during off-peak (crypto is 24/7)
 
+// ── Session Filter (V16: alleen traden tijdens winstgevende sessie) ──
+export const SESSION_FILTER_ENABLED = true;
+export const SESSION_ALLOWED_START  = 8;   // 08:00 UTC (10:00 NL)
+export const SESSION_ALLOWED_END    = 16;  // 16:00 UTC (18:00 NL)
+
+// ── Cooldowns (V16: verkort van 30/15 min) ────────────────────
+export const COOLDOWN_SL_MIN   = 10;  // V16: was hardcoded 30 min — 6% van EU window verspild
+export const COOLDOWN_TIME_MIN = 5;   // V16: was hardcoded 15 min
+
 // ── Dynamic Risk Scaling (consecutive loss streak) ────────────
 export const STREAK_MULT = {
   0: 1.00,    // No consecutive losses → normal
@@ -107,8 +116,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
-    slM: 2.4,
-    tpM: 6.0,
+    slM: 1.8,    // V16: was 2.4 — TP bereikbaar maken
+    tpM: 3.0,    // V16: was 6.0 — onbereikbaar in 72 bars
     minQty: 0.00001,
     qtyStep: 0.00001,
     pricePrecision: 2,
@@ -124,8 +133,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.010,
     drift: 0.00040,
-    slM: 2.2,
-    tpM: 5.5,
+    slM: 1.6,    // V16: was 2.2
+    tpM: 2.8,    // V16: was 5.5
     minQty: 0.001,
     qtyStep: 0.001,
     pricePrecision: 2,
@@ -141,8 +150,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -158,8 +167,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 2.2,
-    tpM: 5.5,
+    slM: 1.6,    // V16: was 2.2
+    tpM: 2.8,    // V16: was 5.5
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -175,8 +184,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
-    slM: 2.2,
-    tpM: 5.5,
+    slM: 1.6,    // V16: was 2.2
+    tpM: 2.8,    // V16: was 5.5
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -192,8 +201,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00038,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -209,8 +218,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -226,8 +235,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
-    slM: 2.4,
-    tpM: 6.0,
+    slM: 1.8,    // V16: was 2.4
+    tpM: 3.0,    // V16: was 6.0
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -243,8 +252,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -260,8 +269,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00040,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -277,8 +286,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 2.2,
-    tpM: 5.5,
+    slM: 1.6,    // V16: was 2.2
+    tpM: 2.8,    // V16: was 5.5
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -294,8 +303,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -311,8 +320,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -328,8 +337,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
-    slM: 2.4,
-    tpM: 6.0,
+    slM: 1.8,    // V16: was 2.4
+    tpM: 3.0,    // V16: was 6.0
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -345,8 +354,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00038,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -362,8 +371,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00038,
-    slM: 2.3,
-    tpM: 5.8,
+    slM: 1.8,    // V16: was 2.3
+    tpM: 3.0,    // V16: was 5.8
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -379,8 +388,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
-    slM: 2.4,
-    tpM: 6.0,
+    slM: 1.8,    // V16: was 2.4
+    tpM: 3.0,    // V16: was 6.0
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -440,11 +449,11 @@ export const GROWTH_MAX_BARS  = 60;     // 5 uur
 export const GROWTH_MIN_RR    = 1.8;    // V13: meer setups (was 2.0)
 
 // Wider circuit breakers
-export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.040;  // was 0.025
-export const GROWTH_DAILY_LOSS_LIMIT_2  = 0.060;  // was 0.040
-export const GROWTH_WEEKLY_LOSS_LIMIT_1 = 0.080;  // was 0.050
-export const GROWTH_WEEKLY_LOSS_LIMIT_2 = 0.120;  // was 0.080
-export const GROWTH_KILL_SWITCH_PCT     = 0.150;  // was 0.090
+export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.060;  // V16: was 0.040
+export const GROWTH_DAILY_LOSS_LIMIT_2  = 0.100;  // V16: was 0.060
+export const GROWTH_WEEKLY_LOSS_LIMIT_1 = 0.100;  // V16: was 0.080
+export const GROWTH_WEEKLY_LOSS_LIMIT_2 = 0.180;  // V16: was 0.120
+export const GROWTH_KILL_SWITCH_PCT     = 0.250;  // V16: was 0.150
 
 // Relaxed correlation (BTC+ETH simultaneously allowed)
 export const GROWTH_CORRELATION_RULES = {
