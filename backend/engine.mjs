@@ -354,7 +354,9 @@ export class TradingEngine {
       for (const { asset, sig } of candidates) {
         if (Object.keys(this.positions).length >= MAX_POS) break;
 
-        const check = canOpenPosition(this.riskState, asset.id, openPositions, this.simTime);
+        // V16: live mode gebruikt Date.now() — this.simTime staat vast op starttijd (sessiefilter fix)
+        const now = this.opts.simMode ? this.simTime : Date.now();
+        const check = canOpenPosition(this.riskState, asset.id, openPositions, now);
         if (!check.allowed) {
           log.info(`Skip ${asset.id}: ${check.reason}`);
           continue;
