@@ -107,11 +107,11 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const volRegime = volatilityRegime(closes, highs, lows);
   if (volRegime === 'volatile') return null;  // hard block: extreme vol = whipsaw
 
-  // ADX must be rising over 6 bars (30 min, with 5% tolerance)
-  // Skip this check when buffer is small (< 120 bars) — ADX is noisy on startup
+  // ADX must not be collapsing: allow up to 20% decline over 30 min (5% was too strict —
+  // in slow bull grind, 5m ADX oscillates and was blocking all signals for 18+ hours)
   if (closes.length > 120) {
     const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
-    if (ADX < ADX_prev * 0.95) return null;
+    if (ADX < ADX_prev * 0.80) return null;
   }
 
   // Price must be above EMA50 (confirms bullish bias, symmetric with short's cur < e50)
@@ -264,10 +264,10 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const volRegime = volatilityRegime(closes, highs, lows);
   if (volRegime === 'volatile') return null;  // hard block
 
-  // ADX must be rising over 6 bars (30 min, with 5% tolerance)
+  // ADX must not be collapsing: allow up to 20% decline (same as long signal)
   if (closes.length > 120) {
     const ADX_prev = calcADX(highs.slice(0, -6), lows.slice(0, -6), closes.slice(0, -6), 14);
-    if (ADX < ADX_prev * 0.95) return null;
+    if (ADX < ADX_prev * 0.80) return null;
   }
 
   // Multi-TF: reject if regime (1H) close above 1H EMA8
