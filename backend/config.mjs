@@ -41,7 +41,7 @@ export const PARTIAL2_R   = 1.0;      // V16: tweede partial bij 1.0R (was 1.5 �
 export const PARTIAL2_PCT = 0.20;     // behouden
 export const TRAIL_R      = 0.8;      // V16: begin trail bij 0.8R (was 1.2 — eerder winst veiligstellen)
 export const TRAIL_ATR    = 2.0;      // V13: bredere trail (was 1.5) — winnaars doorlopen
-export const MAX_BARS     = 72;       // Max hold time (bars) — 6h (was 4.2h) — trades meer ruimte geven
+export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
 export const DAILY_LOSS_LIMIT_1  = 0.060;  // V16: 6% → reduce risk 50% (was 4% — 2 trades triggerde al met €200)

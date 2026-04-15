@@ -20,7 +20,7 @@ import { getRecentTrades, saveOptimizerRun, saveState, loadState } from './persi
 // ── Default params (baseline — matches config.mjs) ─────────────
 // V16: Updated defaults — tpM/slM bereikbaar, matches config.mjs
 const DEFAULT_PARAMS = {
-  _v16:         true,   // V16 flag — voorkomt dat oude DB params deze overschrijven
+  _v17:         true,   // V17 flag — voorkomt dat oude DB params deze overschrijven
   MIN_CONF:     4,
   MIN_RR:       1.5,
   PARTIAL1_R:   0.5,
@@ -29,7 +29,7 @@ const DEFAULT_PARAMS = {
   PARTIAL2_PCT: 0.20,
   TRAIL_R:      0.8,
   TRAIL_ATR:    2.0,
-  MAX_BARS:     72,
+  MAX_BARS:     96,     // V17: 8h (was 72=6h)
   CONF_RISK:    { 3: 0.008, 4: 0.015, 5: 0.025, 6: 0.030 },
   assets: {
     BTCUSDT: { slM: 1.8, tpM: 3.0 },

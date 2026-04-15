@@ -849,6 +849,18 @@ async function reconcilePositions() {
         log.warn('Futures reconciliation failed', { err: e.message });
       }
     }
+
+    // V17: sync engine startCapital/capital/cash met Kraken truth wanneer flat (geen open spot posities)
+    const openSpotPositions = Object.values(engine.positions).filter(p => p.side !== 'short' && !p.paperOnly);
+    if (openSpotPositions.length === 0 && realBalances.spotUSD > 0) {
+      const drift = Math.abs(realBalances.spotUSD - engine.riskState.startCapital);
+      if (drift > engine.riskState.startCapital * 0.01) {
+        log.warn(`V17 Reconcile: syncing startCapital $${engine.riskState.startCapital.toFixed(2)} → $${realBalances.spotUSD.toFixed(2)} (drift $${drift.toFixed(2)})`);
+        engine.riskState.startCapital = realBalances.spotUSD;
+        engine.capital = realBalances.spotUSD;
+        engine.cash    = realBalances.spotCash || realBalances.spotUSD;
+      }
+    }
   } catch (e) {
     log.warn('Reconciliation failed', { err: e.message });
   }
@@ -891,14 +903,14 @@ async function start() {
 
   // Load optimizer params from DB (overrides defaults)
   const savedParams = await loadParams();
-  // V16: Clear stale optimizer params — oude tpM=5.5-6.0 en MAX_BARS=40 zijn niet meer geldig
-  if (savedParams && savedParams._meta && !savedParams._v16) {
-    log.info('V16: Clearing stale optimizer params from DB (old tpM/MAX_BARS values)');
+  // V17: Clear stale optimizer params — oude tpM/MAX_BARS=72 zijn niet meer geldig
+  if (savedParams && !savedParams._v17) {
+    log.info('V17: Clearing stale optimizer params from DB (old tpM/MAX_BARS values)');
     await saveState('params', null);
-    // Engine gebruikt nu nieuwe DEFAULT_PARAMS uit optimizer.mjs (met _v16 flag)
-  } else if (savedParams && savedParams._v16) {
+    // Engine gebruikt nu nieuwe DEFAULT_PARAMS uit optimizer.mjs (met _v17 flag)
+  } else if (savedParams && savedParams._v17) {
     engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine });
-    log.info('Loaded V16 optimizer params from DB', savedParams._meta);
+    log.info('Loaded V17 optimizer params from DB', savedParams._meta);
   }
 
   // Restore engine state if recent (< 30 min old)

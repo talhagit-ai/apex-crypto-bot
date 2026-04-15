@@ -211,9 +211,7 @@ export class TradingEngine {
         // Volatility regime adjustment (V11: geïnverteerd — wider in chop, tighter in trend)
         if (vReg === 'ranging')     trailMult *= 1.30;  // WIJDER in chop (bescherming tegen ruis)
         if (vReg === 'clean_trend') trailMult *= 0.85;  // strakker in trend (slot winst sneller in)
-        // Age decay: gentle tightening in last 20% of position life (V11: veel zachter)
-        const ageRatio2 = pos.age / this.MBARS;
-        if (ageRatio2 > 0.80) trailMult *= Math.max(0.75, 1 - (ageRatio2 - 0.80) * 0.5);
+        // V17: trail decay verwijderd — tightening in laatste 20% sloot winners voortijdig (data: max win R=+0.63)
         if (isShort) {
           const newSl = cur + ATR * trailMult;
           if (newSl < pos.sl) pos.sl = newSl;
@@ -223,20 +221,8 @@ export class TradingEngine {
         }
       }
 
-      // ── Time Decay: gentle SL tightening very late in trade life (V11: veel zachter) ──
-      // V14: alleen na partial1 — voorkomt dat SL naar entry springt bij stagnante positie
-      // zonder gerealiseerde winst. TIME exit (age >= MBARS) sluit ongewijzigd af.
-      const ageRatio = pos.age / this.MBARS;
-      if (ageRatio > 0.85 && !pos.partial2Taken && pnlR > 0 && pos.partial1Taken) {
-        const decayMult = 1 - ((ageRatio - 0.85) / 0.15) * 0.15; // 1.0 → 0.85 (was 1.0 → 0.5)
-        if (!isShort) {
-          const decaySl = pos.entry + (cur - pos.entry) * (1 - decayMult);
-          if (decaySl > pos.sl) pos.sl = decaySl;
-        } else {
-          const decaySl = pos.entry - (pos.entry - cur) * (1 - decayMult);
-          if (decaySl < pos.sl) pos.sl = decaySl;
-        }
-      }
+      // V17: age decay SL-tightening verwijderd — trok SL naar entry bij zijwaartse drift,
+      // veroorzaakte 89% TIME exits met tiny R (data: 23/27 exits had |R|<0.8)
 
       // ── Exit Conditions ─────────────────────────────────────
       let exitReason = null;
