@@ -116,8 +116,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
-    slM: 1.8,    // V16: was 2.4 — TP bereikbaar maken
-    tpM: 3.0,    // V16: was 6.0 — onbereikbaar in 72 bars
+    slM: 2.8,    // V17: 5m ATR basis (was 1.8 op 1H ATR)
+    tpM: 4.5,    // V17: 5m ATR basis, R:R=1.61 (was 3.0 op 1H ATR)
     minQty: 0.00001,
     qtyStep: 0.00001,
     pricePrecision: 2,
@@ -133,8 +133,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.010,
     drift: 0.00040,
-    slM: 1.6,    // V16: was 2.2
-    tpM: 2.8,    // V16: was 5.5
+    slM: 2.8,    // V17: 5m ATR basis (large cap)
+    tpM: 4.5,    // V17: R:R=1.61
     minQty: 0.001,
     qtyStep: 0.001,
     pricePrecision: 2,
@@ -150,8 +150,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.5,    // V17: 5m ATR basis (mid cap)
+    tpM: 4.0,    // V17: R:R=1.60
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -167,8 +167,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 1.6,    // V16: was 2.2
-    tpM: 2.8,    // V16: was 5.5
+    slM: 2.5,    // V17: 5m ATR basis (mid cap)
+    tpM: 4.0,    // V17: R:R=1.60
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -184,8 +184,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
-    slM: 1.6,    // V16: was 2.2
-    tpM: 2.8,    // V16: was 5.5
+    slM: 2.5,    // V17: 5m ATR basis (mid cap)
+    tpM: 4.0,    // V17: R:R=1.60
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -201,8 +201,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00038,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -218,8 +218,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -235,8 +235,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
-    slM: 1.8,    // V16: was 2.4
-    tpM: 3.0,    // V16: was 6.0
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -252,8 +252,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -269,8 +269,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00040,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -286,8 +286,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 1.6,    // V16: was 2.2
-    tpM: 2.8,    // V16: was 5.5
+    slM: 2.5,    // V17: 5m ATR basis (mid cap)
+    tpM: 4.0,    // V17: R:R=1.60
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -303,8 +303,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -320,8 +320,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00040,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -337,8 +337,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
-    slM: 1.8,    // V16: was 2.4
-    tpM: 3.0,    // V16: was 6.0
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -354,8 +354,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00038,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -371,8 +371,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00038,
-    slM: 1.8,    // V16: was 2.3
-    tpM: 3.0,    // V16: was 5.8
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -388,8 +388,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.025,
     drift: 0.00042,
-    slM: 1.8,    // V16: was 2.4
-    tpM: 3.0,    // V16: was 6.0
+    slM: 2.2,    // V17: 5m ATR basis (alt)
+    tpM: 3.5,    // V17: R:R=1.59
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,

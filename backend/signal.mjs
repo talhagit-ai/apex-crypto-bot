@@ -198,8 +198,8 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (breakout.breakout) dynTpM *= 1.20;
   if (atrPctile > 70) dynTpM *= 1.10;
 
-  const sl    = cur - ATR_SL * asset.slM;   // SL: 1H ATR (breder, overleeft whipsaw)
-  const tp    = cur + ATR  * dynTpM;        // V17: TP: 5m ATR (bereikbaar in MAX_BARS window)
+  const sl    = cur - ATR * asset.slM;       // V17: 5m ATR (consistent met TP)
+  const tp    = cur + ATR * dynTpM;         // V17: 5m ATR (bereikbaar in MAX_BARS window)
   const slDist = Math.abs(cur - sl);
   const tpDist = Math.abs(tp - cur);
   const rr    = tpDist / Math.max(slDist, 1e-9);
@@ -352,8 +352,8 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (atrPctile > 70) dynTpM *= 1.10;
 
   // Short: SL above entry, TP below entry
-  const sl    = cur + ATR_SL * asset.slM;   // SL: 1H ATR (breder, overleeft whipsaw)
-  const tp    = cur - ATR  * dynTpM;        // V17: TP: 5m ATR (bereikbaar in MAX_BARS window)
+  const sl    = cur + ATR * asset.slM;      // V17: 5m ATR (consistent met TP)
+  const tp    = cur - ATR * dynTpM;         // V17: 5m ATR (bereikbaar in MAX_BARS window)
   const slDist = Math.abs(sl - cur);
   const tpDist = Math.abs(cur - tp);
   const rr    = tpDist / Math.max(slDist, 1e-9);

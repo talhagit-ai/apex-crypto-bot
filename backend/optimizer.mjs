@@ -32,31 +32,31 @@ const DEFAULT_PARAMS = {
   MAX_BARS:     96,     // V17: 8h (was 72=6h)
   CONF_RISK:    { 3: 0.008, 4: 0.015, 5: 0.025, 6: 0.030 },
   assets: {
-    BTCUSDT: { slM: 1.8, tpM: 3.0 },
-    ETHUSDT: { slM: 1.6, tpM: 2.8 },
-    SOLUSDT: { slM: 1.8, tpM: 3.0 },
-    XRPUSDT: { slM: 1.6, tpM: 2.8 },
-    ADAUSDT: { slM: 1.6, tpM: 2.8 },
-    DOTUSD:  { slM: 1.8, tpM: 3.0 },
-    LINKUSD: { slM: 1.8, tpM: 3.0 },
-    AVAXUSD: { slM: 1.8, tpM: 3.0 },
-    DOGEUSD: { slM: 1.8, tpM: 3.0 },
-    ATOMUSD: { slM: 1.8, tpM: 3.0 },
-    LTCUSD:  { slM: 1.6, tpM: 2.8 },
-    NEARUSD: { slM: 1.8, tpM: 3.0 },
-    UNIUSD:  { slM: 1.8, tpM: 3.0 },
-    AAVEUSD: { slM: 1.8, tpM: 3.0 },
-    POLUSD:  { slM: 1.8, tpM: 3.0 },
-    FILUSD:  { slM: 1.8, tpM: 3.0 },
-    ARBUSD:  { slM: 1.8, tpM: 3.0 },
+    BTCUSDT: { slM: 2.8, tpM: 4.5 },  // V17: 5m ATR basis (large cap)
+    ETHUSDT: { slM: 2.8, tpM: 4.5 },
+    SOLUSDT: { slM: 2.5, tpM: 4.0 },  // mid cap
+    XRPUSDT: { slM: 2.5, tpM: 4.0 },
+    ADAUSDT: { slM: 2.5, tpM: 4.0 },
+    LTCUSD:  { slM: 2.5, tpM: 4.0 },
+    DOTUSD:  { slM: 2.2, tpM: 3.5 },  // alt
+    LINKUSD: { slM: 2.2, tpM: 3.5 },
+    AVAXUSD: { slM: 2.2, tpM: 3.5 },
+    DOGEUSD: { slM: 2.2, tpM: 3.5 },
+    ATOMUSD: { slM: 2.2, tpM: 3.5 },
+    NEARUSD: { slM: 2.2, tpM: 3.5 },
+    UNIUSD:  { slM: 2.2, tpM: 3.5 },
+    AAVEUSD: { slM: 2.2, tpM: 3.5 },
+    POLUSD:  { slM: 2.2, tpM: 3.5 },
+    FILUSD:  { slM: 2.2, tpM: 3.5 },
+    ARBUSD:  { slM: 2.2, tpM: 3.5 },
   },
 };
 
 // ── Parameter search space ─────────────────────────────────────
 // V16: search space aangepast aan bereikbare tpM/slM
 const SEARCH_SPACE = {
-  slM:  [1.4, 1.6, 1.8, 2.0, 2.2],
-  tpM:  [2.2, 2.5, 2.8, 3.0, 3.2, 3.5],
+  slM:  [2.0, 2.2, 2.5, 2.8, 3.0],         // V17: 5m ATR basis
+  tpM:  [3.0, 3.5, 4.0, 4.5, 5.0],         // V17: 5m ATR basis
   CONF_RISK_3: [0.006, 0.008, 0.010],
   CONF_RISK_4: [0.012, 0.015, 0.018],
   CONF_RISK_5: [0.020, 0.025, 0.030],
