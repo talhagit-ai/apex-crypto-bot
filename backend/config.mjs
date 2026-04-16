@@ -27,12 +27,12 @@ export const MODE             = process.env.MODE || 'spot';
 
 // ── Capital & Position ─────────────────────────────────────────
 export const CAPITAL    = Number(process.env.CAPITAL) || 100;
-export const MAX_POS    = 3;          // V13: realistisch voor €100 (was 5 — onhaalbaar met €100)
+export const MAX_POS    = 5;          // V17b: meer gelijktijdige posities (was 3)
 export const MAX_DEPLOY = 0.92;       // V13: benut meer kapitaal (was 0.80)
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
-export const MIN_RR     = 1.5;        // V16: 1.5:1 R:R (was 2.0) — past bij nieuwe tpM/slM ratio
+export const MIN_RR     = 1.2;        // V17b: meer setups doorlaten (was 1.5)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
 export const PARTIAL1_R   = 0.5;      // V16: eerste winst bij 0.5R (was 0.75 — eerder cash vrijmaken)
@@ -49,10 +49,10 @@ export const DAILY_LOSS_LIMIT_2  = 0.100;  // V16: 10% → stop 24h (was 6% — 
 export const WEEKLY_LOSS_LIMIT_1 = 0.080;  // V16: 8% → reduce size 50% (was 5%)
 export const WEEKLY_LOSS_LIMIT_2 = 0.150;  // V16: 15% → stop entire week (was 8%)
 export const KILL_SWITCH_PCT     = 0.20;   // V16: 20% drawdown → full stop (was 12%)
-export const LOSS_LIMIT          = 4;      // Consecutive losses → pause asset
-export const PAUSE_MINUTES       = 60;     // Pause duration after consecutive losses
-export const TOTAL_LOSS_LIMIT    = 6;      // 6 losses across all → pause all
-export const TOTAL_PAUSE_MINUTES = 90;     // Pause all duration
+export const LOSS_LIMIT          = 6;      // V17b: meer kansen per asset (was 4)
+export const PAUSE_MINUTES       = 30;     // V17b: kortere pauze (was 60)
+export const TOTAL_LOSS_LIMIT    = 10;     // V17b: meer kansen totaal (was 6)
+export const TOTAL_PAUSE_MINUTES = 30;     // V17b: kortere pauze (was 90)
 export const MAX_RISK_PER_TRADE  = 0.030;  // 3.0% max risk per single trade
 
 // ── Confidence-Based Risk Sizing ───────────────────────────────
@@ -71,7 +71,7 @@ export const FACTOR_WEIGHT_MAX = Object.values(FACTOR_WEIGHTS).reduce((a, b) => 
 
 // ── Regime Filter ──────────────────────────────────────────────
 export const SLOPE_BARS = 5;          // EMA50 slope lookback (5h instead of 10h — faster regime detection)
-export const ADX_MIN    = 19;         // V13: mildere trends toelaten (was 22 — te streng)
+export const ADX_MIN    = 15;         // V17b: zwakkere trends accepteren (was 19)
 
 // ── Timeframe ──────────────────────────────────────────────────
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
@@ -85,7 +85,7 @@ export const PEAK_HOURS = [
   [13, 17],   // 13:00-17:00 UTC (US overlap, highest volume)
   [0, 2],     // 00:00-02:00 UTC (Asian session open)
 ];
-export const OFF_PEAK_RISK_MULT = 0.85; // 85% risk during off-peak (crypto is 24/7)
+export const OFF_PEAK_RISK_MULT = 1.0;  // V17b: geen risicoverlaging buiten peak (was 0.85)
 
 // ── Session Filter (V16: alleen traden tijdens winstgevende sessie) ──
 export const SESSION_FILTER_ENABLED = true;
@@ -93,16 +93,16 @@ export const SESSION_ALLOWED_START  = 8;   // 08:00 UTC (10:00 NL)
 export const SESSION_ALLOWED_END    = 16;  // 16:00 UTC (18:00 NL)
 
 // ── Cooldowns (V16: verkort van 30/15 min) ────────────────────
-export const COOLDOWN_SL_MIN   = 10;  // V16: was hardcoded 30 min — 6% van EU window verspild
-export const COOLDOWN_TIME_MIN = 5;   // V16: was hardcoded 15 min
+export const COOLDOWN_SL_MIN   = 3;   // V17b: sneller re-entry (was 10 min)
+export const COOLDOWN_TIME_MIN = 1;   // V17b: sneller re-entry (was 5 min)
 
 // ── Dynamic Risk Scaling (consecutive loss streak) ────────────
 export const STREAK_MULT = {
   0: 1.00,    // No consecutive losses → normal
-  1: 0.90,    // 1 loss in a row → -10%
-  2: 0.75,    // 2 losses → -25%
-  3: 0.50,    // 3 losses → halve risk
-  4: 0.30,    // 4+ losses → minimal risk, wait for trend
+  1: 0.95,    // V17b: -5% (was -10%)
+  2: 0.85,    // V17b: -15% (was -25%)
+  3: 0.70,    // V17b: -30% (was -50%)
+  4: 0.50,    // V17b: -50% (was -70%)
 };
 export const DYNAMIC_RISK = STREAK_MULT; // backward compat
 
@@ -445,8 +445,8 @@ export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
 
 // Faster exits, more trades
 export const GROWTH_TRAIL_R   = 0.5;    // V13: begin trail eerder (was 0.8)
-export const GROWTH_MAX_BARS  = 60;     // 5 uur
-export const GROWTH_MIN_RR    = 1.8;    // V13: meer setups (was 2.0)
+export const GROWTH_MAX_BARS  = 120;    // V17: 10h op 5m candles (was 60=5h — te kort voor 5m ATR TP)
+export const GROWTH_MIN_RR    = 1.2;    // V17: meer setups doorlaten (was 1.8 — blokkeerde alles met V17 R:R=1.59)
 
 // Wider circuit breakers
 export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.060;  // V16: was 0.040
@@ -463,7 +463,7 @@ export const GROWTH_CORRELATION_RULES = {
 };
 
 // ── Volume Threshold ──────────────────────────────────────────
-export const VR_THRESHOLD = 1.10;  // V13: versoepeld (was 1.15 — te streng)
+export const VR_THRESHOLD = 1.05;  // V17b: minder streng volume filter (was 1.10)
 
 // ── Fee Structure (Bybit Spot) ─────────────────────────────────
 export const FEE_RATE = Number(process.env.FEE_RATE) || 0.0016; // 0.16% Kraken taker fee
