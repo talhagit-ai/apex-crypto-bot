@@ -22,14 +22,13 @@ import { getRecentTrades, saveOptimizerRun, saveState, loadState } from './persi
 const DEFAULT_PARAMS = {
   _v17:         true,   // V17 flag — voorkomt dat oude DB params deze overschrijven
   MIN_CONF:     4,
-  MIN_RR:       1.5,
+  // MIN_RR, TRAIL_R, MAX_BARS opzettelijk NIET hier — engine gebruikt GROWTH_* of config waarden
+  // zodat growthMode=true de juiste GROWTH_MIN_RR/GROWTH_MAX_BARS/GROWTH_TRAIL_R krijgt
   PARTIAL1_R:   0.5,
   PARTIAL1_PCT: 0.30,
   PARTIAL2_R:   1.0,
   PARTIAL2_PCT: 0.20,
-  TRAIL_R:      0.8,
   TRAIL_ATR:    2.0,
-  MAX_BARS:     96,     // V17: 8h (was 72=6h)
   CONF_RISK:    { 3: 0.008, 4: 0.015, 5: 0.025, 6: 0.030 },
   assets: {
     BTCUSDT: { slM: 2.8, tpM: 4.5 },  // V17: 5m ATR basis (large cap)
