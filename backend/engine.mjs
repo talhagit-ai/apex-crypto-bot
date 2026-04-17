@@ -246,15 +246,16 @@ export class TradingEngine {
     const openPositions = Object.entries(this.positions).map(([id, p]) => ({ assetId: id, ...p }));
 
     if (openPositions.length < MAX_POS) {
-      // BTC cross-asset regime filter: if BTC drops >3% in 4h, block alt longs
+      // V18: BTC cross-asset regime filter: block alt longs als BTC > 3% daalt in 4h
+      // Verscherpt van -5% → -3% (bij $197 kapitaal is elke alt-correlatie verlies te duur)
       let btcRegimeBlock = false;
       const btcData = barData['BTCUSDT'];
       if (btcData?.closes?.length >= 48) {
         const btcNow  = btcData.closes[btcData.closes.length - 1];
         const btc4hAgo = btcData.closes[btcData.closes.length - 48];
-        if ((btcNow - btc4hAgo) / btc4hAgo < -0.05) {
+        if ((btcNow - btc4hAgo) / btc4hAgo < -0.03) {
           btcRegimeBlock = true;
-          log.info('BTC regime block: BTC down >5% in 4h — blocking alt longs');
+          log.info('BTC regime block: BTC down >3% in 4h — blocking alt longs');
         }
       }
 

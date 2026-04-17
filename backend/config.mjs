@@ -27,8 +27,8 @@ export const MODE             = process.env.MODE || 'spot';
 
 // ── Capital & Position ─────────────────────────────────────────
 export const CAPITAL    = Number(process.env.CAPITAL) || 100;
-export const MAX_POS    = 5;          // V17b: meer gelijktijdige posities (was 3)
-export const MAX_DEPLOY = 0.92;       // V13: benut meer kapitaal (was 0.80)
+export const MAX_POS    = 3;          // V18: minder posities = focus op kwaliteit bij klein kapitaal (was 5)
+export const MAX_DEPLOY = 0.70;       // V18: 30% cash reserve (was 0.92 — te weinig buffer bij $197)
 export const MAX_SINGLE_PCT = 0.40;   // V17b: max 40% kapitaal per positie (voorkomt ADA/micro-ATR concentratie)
 export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10) — orders daaronder worden geweigerd
 
@@ -37,12 +37,12 @@ export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 —
 export const MIN_RR     = 1.2;        // V17b: meer setups doorlaten (was 1.5)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 0.5;      // V16: eerste winst bij 0.5R (was 0.75 — eerder cash vrijmaken)
+export const PARTIAL1_R   = 0.75;     // V18: later partial = minder fee-impact bij klein kapitaal (was 0.5)
 export const PARTIAL1_PCT = 0.30;     // V16: pak 30% (was 25%)
 export const PARTIAL2_R   = 1.0;      // V16: tweede partial bij 1.0R (was 1.5 — met lagere tpM is dit de halfway)
 export const PARTIAL2_PCT = 0.20;     // behouden
 export const TRAIL_R      = 0.8;      // V16: begin trail bij 0.8R (was 1.2 — eerder winst veiligstellen)
-export const TRAIL_ATR    = 2.0;      // V13: bredere trail (was 1.5) — winnaars doorlopen
+export const TRAIL_ATR    = 1.5;      // V18: strakkere trail bij klein kapitaal (was 2.0 — pak winst eerder)
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
@@ -53,7 +53,7 @@ export const WEEKLY_LOSS_LIMIT_2 = 0.150;  // V16: 15% → stop entire week (was
 export const KILL_SWITCH_PCT     = 0.20;   // V16: 20% drawdown → full stop (was 12%)
 export const LOSS_LIMIT          = 6;      // V17b: meer kansen per asset (was 4)
 export const PAUSE_MINUTES       = 30;     // V17b: kortere pauze (was 60)
-export const TOTAL_LOSS_LIMIT    = 10;     // V17b: meer kansen totaal (was 6)
+export const TOTAL_LOSS_LIMIT    = 6;      // V18: strenger bij klein kapitaal (was 10 — 10×$8=$80=40% drawdown)
 export const TOTAL_PAUSE_MINUTES = 30;     // V17b: kortere pauze (was 90)
 export const MAX_RISK_PER_TRADE  = 0.030;  // 3.0% max risk per single trade
 
@@ -195,23 +195,7 @@ export const ASSETS = [
     corrGroup: 'SPEC',
     regimeATR: 0.08,
   },
-  {
-    id: 'DOTUSD',
-    symbol: 'DOTUSD',
-    krakenSymbol: 'DOT/USD',
-    krakenPair:   'DOTUSD',
-    category: MODE,
-    vol: 0.018,
-    drift: 0.00038,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 0.1,
-    qtyStep: 0.1,
-    pricePrecision: 3,
-    color: '#e6007a',
-    corrGroup: 'ALT1',
-    regimeATR: 0.09,
-  },
+  // V18: DOT verwijderd (illiquide, hoge spread bij klein kapitaal)
   {
     id: 'LINKUSD',
     symbol: 'LINKUSD',
@@ -263,168 +247,22 @@ export const ASSETS = [
     corrGroup: 'ALT4',
     regimeATR: 0.09,
   },
-  {
-    id: 'ATOMUSD',
-    symbol: 'ATOMUSD',
-    krakenSymbol: 'ATOM/USD',
-    krakenPair:   'ATOMUSD',
-    category: MODE,
-    vol: 0.018,
-    drift: 0.00040,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 0.1,
-    qtyStep: 0.1,
-    pricePrecision: 3,
-    color: '#2e3148',
-    corrGroup: 'ALT5',
-    regimeATR: 0.09,
-  },
-  {
-    id: 'LTCUSD',
-    symbol: 'LTCUSD',
-    krakenSymbol: 'LTC/USD',
-    krakenPair:   'XLTCZUSD',
-    category: MODE,
-    vol: 0.012,
-    drift: 0.00035,
-    slM: 2.5,    // V17: 5m ATR basis (mid cap)
-    tpM: 4.0,    // V17: R:R=1.60
-    minQty: 0.01,
-    qtyStep: 0.01,
-    pricePrecision: 2,
-    color: '#bfbbbb',
-    corrGroup: 'ALT6',
-    regimeATR: 0.08,
-  },
-  {
-    id: 'NEARUSD',
-    symbol: 'NEARUSD',
-    krakenSymbol: 'NEAR/USD',
-    krakenPair:   'NEARUSD',
-    category: MODE,
-    vol: 0.020,
-    drift: 0.00042,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 0.1,
-    qtyStep: 0.1,
-    pricePrecision: 3,
-    color: '#00ec97',
-    corrGroup: 'ALT7',
-    regimeATR: 0.09,
-  },
-  {
-    id: 'UNIUSD',
-    symbol: 'UNIUSD',
-    krakenSymbol: 'UNI/USD',
-    krakenPair:   'UNIUSD',
-    category: MODE,
-    vol: 0.022,
-    drift: 0.00040,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 0.1,
-    qtyStep: 0.1,
-    pricePrecision: 3,
-    color: '#ff007a',
-    corrGroup: 'DEFI1',
-    regimeATR: 0.09,
-  },
-  {
-    id: 'AAVEUSD',
-    symbol: 'AAVEUSD',
-    krakenSymbol: 'AAVE/USD',
-    krakenPair:   'AAVEUSD',
-    category: MODE,
-    vol: 0.025,
-    drift: 0.00042,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 0.01,
-    qtyStep: 0.01,
-    pricePrecision: 2,
-    color: '#b6509e',
-    corrGroup: 'DEFI2',
-    regimeATR: 0.09,
-  },
-  {
-    id: 'POLUSD',
-    symbol: 'POLUSD',
-    krakenSymbol: 'POL/USD',
-    krakenPair:   'POLUSD',
-    category: MODE,
-    vol: 0.020,
-    drift: 0.00038,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 1,
-    qtyStep: 0.1,
-    pricePrecision: 4,
-    color: '#8247e5',
-    corrGroup: 'L2_1',
-    regimeATR: 0.09,
-  },
-  {
-    id: 'FILUSD',
-    symbol: 'FILUSD',
-    krakenSymbol: 'FIL/USD',
-    krakenPair:   'FILUSD',
-    category: MODE,
-    vol: 0.022,
-    drift: 0.00038,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 0.1,
-    qtyStep: 0.1,
-    pricePrecision: 3,
-    color: '#0090ff',
-    corrGroup: 'ALT8',
-    regimeATR: 0.09,
-  },
-  {
-    id: 'ARBUSD',
-    symbol: 'ARBUSD',
-    krakenSymbol: 'ARB/USD',
-    krakenPair:   'ARBUSD',
-    category: MODE,
-    vol: 0.025,
-    drift: 0.00042,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
-    minQty: 1,
-    qtyStep: 0.1,
-    pricePrecision: 4,
-    color: '#28a0f0',
-    corrGroup: 'L2_2',
-    regimeATR: 0.09,
-  },
-  // ── Top 17 liquid assets ────────────────────────────────────
+  // V18: ATOM, LTC, NEAR, UNI, AAVE, POL, FIL, ARB verwijderd
+  // Reden: illiquide op Kraken, hoge spreads vreten fees bij $197 kapitaal
+  // ── Top 8 liquid assets (focus op kwaliteit bij klein kapitaal) ──
 ];
 
-// ── Correlation Groups ─────────────────────────────────────────
-// BTC+ETH = HIGH correlation (0.85) → never hold both
-// SOL = MED correlation with BTC (0.75)
-// XRP = LOW correlation with BTC (0.60)
-// ADA = SPEC correlation (~0.60)
-// DOT/LINK/AVAX/DOGE/ATOM/LTC/NEAR = ALT groups (independent slots)
+// ── Correlation Groups (V18: 8 assets) ────────────────────────
+// BTC+ETH = HIGH correlation → max 1 tegelijk bij klein kapitaal
+// Met MAX_POS=3: je wilt spreiding, niet 2 van dezelfde groep
 export const CORRELATION_RULES = {
-  HIGH:  { maxSimultaneous: 2 },  // BTC + ETH tegelijk (was 1 — te restrictief)
+  HIGH:  { maxSimultaneous: 1 },  // V18: BTC OF ETH, niet beide (was 2 — te duur bij $197)
   MED:   { maxSimultaneous: 1 },  // SOL
   LOW:   { maxSimultaneous: 1 },  // XRP
   SPEC:  { maxSimultaneous: 1 },  // ADA
-  ALT1:  { maxSimultaneous: 1 },  // DOT
   ALT2:  { maxSimultaneous: 1 },  // LINK
   ALT3:  { maxSimultaneous: 1 },  // AVAX
   ALT4:  { maxSimultaneous: 1 },  // DOGE
-  ALT5:  { maxSimultaneous: 1 },  // ATOM
-  ALT6:  { maxSimultaneous: 1 },  // LTC
-  ALT7:  { maxSimultaneous: 1 },  // NEAR
-  ALT8:  { maxSimultaneous: 1 },  // FIL
-  DEFI1: { maxSimultaneous: 1 },  // UNI
-  DEFI2: { maxSimultaneous: 1 },  // AAVE
-  L2_1:  { maxSimultaneous: 1 },  // POL
-  L2_2:  { maxSimultaneous: 1 },  // ARB
 };
 
 // ── Server ─────────────────────────────────────────────────────
@@ -457,11 +295,10 @@ export const GROWTH_WEEKLY_LOSS_LIMIT_1 = 0.100;  // V16: was 0.080
 export const GROWTH_WEEKLY_LOSS_LIMIT_2 = 0.180;  // V16: was 0.120
 export const GROWTH_KILL_SWITCH_PCT     = 0.250;  // V16: was 0.150
 
-// Relaxed correlation (BTC+ETH simultaneously allowed)
+// Relaxed correlation in growth mode (BTC+ETH samen toegestaan bij groter kapitaal)
 export const GROWTH_CORRELATION_RULES = {
   ...CORRELATION_RULES,
-  HIGH: { maxSimultaneous: 2 },  // BTC+ETH together
-  MED:  { maxSimultaneous: 2 },  // SOL-group
+  HIGH: { maxSimultaneous: 2 },  // BTC+ETH samen (alleen bij groter kapitaal)
 };
 
 // ── Volume Threshold ──────────────────────────────────────────

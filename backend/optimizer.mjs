@@ -24,30 +24,22 @@ const DEFAULT_PARAMS = {
   MIN_CONF:     4,
   // MIN_RR, TRAIL_R, MAX_BARS opzettelijk NIET hier — engine gebruikt GROWTH_* of config waarden
   // zodat growthMode=true de juiste GROWTH_MIN_RR/GROWTH_MAX_BARS/GROWTH_TRAIL_R krijgt
-  PARTIAL1_R:   0.5,
+  PARTIAL1_R:   0.75,   // V18: later partial = minder fee-impact
   PARTIAL1_PCT: 0.30,
   PARTIAL2_R:   1.0,
   PARTIAL2_PCT: 0.20,
-  TRAIL_ATR:    2.0,
+  TRAIL_ATR:    1.5,    // V18: strakkere trail bij klein kapitaal
   CONF_RISK:    { 3: 0.008, 4: 0.015, 5: 0.025, 6: 0.030 },
   assets: {
-    BTCUSDT: { slM: 2.8, tpM: 4.5 },  // V17: 5m ATR basis (large cap)
+    // V18: 8 assets (was 17 — focus op liquide pairs bij klein kapitaal)
+    BTCUSDT: { slM: 2.8, tpM: 4.5 },  // large cap
     ETHUSDT: { slM: 2.8, tpM: 4.5 },
     SOLUSDT: { slM: 2.5, tpM: 4.0 },  // mid cap
     XRPUSDT: { slM: 2.5, tpM: 4.0 },
     ADAUSDT: { slM: 2.5, tpM: 4.0 },
-    LTCUSD:  { slM: 2.5, tpM: 4.0 },
-    DOTUSD:  { slM: 2.2, tpM: 3.5 },  // alt
-    LINKUSD: { slM: 2.2, tpM: 3.5 },
+    LINKUSD: { slM: 2.2, tpM: 3.5 },  // alt
     AVAXUSD: { slM: 2.2, tpM: 3.5 },
     DOGEUSD: { slM: 2.2, tpM: 3.5 },
-    ATOMUSD: { slM: 2.2, tpM: 3.5 },
-    NEARUSD: { slM: 2.2, tpM: 3.5 },
-    UNIUSD:  { slM: 2.2, tpM: 3.5 },
-    AAVEUSD: { slM: 2.2, tpM: 3.5 },
-    POLUSD:  { slM: 2.2, tpM: 3.5 },
-    FILUSD:  { slM: 2.2, tpM: 3.5 },
-    ARBUSD:  { slM: 2.2, tpM: 3.5 },
   },
 };
 
