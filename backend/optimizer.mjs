@@ -12,7 +12,7 @@
 //  Runs: every Sunday 02:00 UTC + manual via POST /optimize
 // ═══════════════════════════════════════════════════════════════
 
-import { ASSETS, CAPITAL } from './config.mjs';
+import { ASSETS, CAPITAL, MIN_RR } from './config.mjs';
 import { TradingEngine } from './engine.mjs';
 import { log } from './logger.mjs';
 import { getRecentTrades, saveOptimizerRun, saveState, loadState } from './persistence.mjs';
@@ -266,7 +266,7 @@ function generateCandidates(current, analysis) {
         // Safety: clamp to search space bounds
         const newSlM = clamp(slM, 1.2, 2.2);
         const newTpM = clamp(tpM, 2.5, 6.0);
-        if (newTpM / newSlM < current.MIN_RR) continue; // must maintain R:R
+        if (newTpM / newSlM < (current.MIN_RR ?? MIN_RR)) continue; // must maintain R:R
 
         const candidate = deepClone(current);
         candidate.assets[asset.id].slM = +newSlM.toFixed(2);

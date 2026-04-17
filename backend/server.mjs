@@ -591,7 +591,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     const cost = pos.qty * pos.entry;
     if (pos.side !== 'short' && realBalances.spotCash !== undefined && realBalances.spotCash < cost * 0.5) {
       log.warn(`SKIP ${assetId}: insufficient spot cash ($${realBalances.spotCash?.toFixed(2)} < $${(cost*0.5).toFixed(2)})`);
-      _rollbackPosition(assetId, pos);
+      _rollbackPosition(assetId, pos, true);
       continue;
     }
 
@@ -616,7 +616,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     // Safety: never execute shorts when ENABLE_SHORTS is off
     if (pos.side === 'short' && !ENABLE_SHORTS) {
       log.error(`CRITICAL: SHORT ${assetId} created when shorts disabled — rolling back`);
-      _rollbackPosition(assetId, pos);
+      _rollbackPosition(assetId, pos, true);
       reportError(`SHORT ${assetId} aangemaakt terwijl shorts uitgeschakeld`);
       continue;
     }
@@ -626,14 +626,14 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
       const marginNeeded = pos.qty * pos.entry * 0.10;
       if (realBalances.futuresUSD !== null && realBalances.futuresUSD < marginNeeded * 1.2) {
         log.warn(`SKIP SHORT ${assetId}: insufficient futures margin ($${realBalances.futuresUSD?.toFixed(2)} < $${(marginNeeded*1.2).toFixed(2)})`);
-        _rollbackPosition(assetId, pos);
+        _rollbackPosition(assetId, pos, true);
         reportError(`SHORT ${assetId} overgeslagen: onvoldoende futures marge`);
         continue;
       }
       // Pre-flight: check futures symbol exists
       if (!futures.hasFuturesSymbol(assetId)) {
         log.warn(`SKIP SHORT ${assetId}: no futures symbol mapping`);
-        _rollbackPosition(assetId, pos);
+        _rollbackPosition(assetId, pos, true);
         continue;
       }
       log.signal(`REAL ORDER: SHORT ${assetId}`, { qty: pos.qty, entry: pos.entry });
@@ -643,7 +643,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
         notifyShort(assetId, pos.qty, pos.entry, pos.sl, pos.tp, pos.conf || 3);
       } catch (err) {
         log.error(`Futures short FAILED — rolling back ${assetId}`, { err: err.message });
-        _rollbackPosition(assetId, pos);
+        _rollbackPosition(assetId, pos, true);
         reportError(`SHORT ${assetId} gefaald: ${err.message}`);
       }
     } else {
@@ -659,7 +659,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
         notifyBuy(assetId, pos.qty, fill.fillPrice, pos.sl, pos.tp, signal.conf || 3);
       } else {
         log.error(`Spot BUY FAILED — rolling back ${assetId}`);
-        _rollbackPosition(assetId, pos);
+        _rollbackPosition(assetId, pos, true);
         reportError(`BUY ${assetId} gefaald — positie teruggedraaid`);
       }
     }
@@ -866,8 +866,12 @@ async function reconcilePositions() {
   }
 }
 
-/** Rollback engine position when real order fails */
-function _rollbackPosition(assetId, pos) {
+/**
+ * Rollback engine position.
+ * @param {boolean} isFailedOrder - true = order nooit uitgevoerd (verwijder trade log entry)
+ *                                  false = reconcile/externe sluiting (trade log behouden)
+ */
+function _rollbackPosition(assetId, pos, isFailedOrder = false) {
   if (pos.side === 'short') {
     engine.cash += pos.margin || 0;
   } else {
@@ -875,12 +879,15 @@ function _rollbackPosition(assetId, pos) {
   }
   delete engine.positions[assetId];
 
-  // Remove the ghost entry trade log — prevents repeated failed entries from spamming trades[]
-  const entrySide = pos.side === 'short' ? 'SHORT' : 'BUY';
-  for (let i = engine.trades.length - 1; i >= 0; i--) {
-    if (engine.trades[i].id === assetId && engine.trades[i].side === entrySide) {
-      engine.trades.splice(i, 1);
-      break;
+  // Verwijder ghost entry alleen bij gefaalde orders (nooit op exchange belanden)
+  // Bij reconciliatie (positie was echt open) laten we de BUY/SHORT entry staan
+  if (isFailedOrder) {
+    const entrySide = pos.side === 'short' ? 'SHORT' : 'BUY';
+    for (let i = engine.trades.length - 1; i >= 0; i--) {
+      if (engine.trades[i].id === assetId && engine.trades[i].side === entrySide) {
+        engine.trades.splice(i, 1);
+        break;
+      }
     }
   }
 
