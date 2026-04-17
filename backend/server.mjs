@@ -925,7 +925,7 @@ async function reconcilePositions() {
         log.warn(`V17 Reconcile: syncing startCapital $${engine.riskState.startCapital.toFixed(2)} → $${realBalances.spotUSD.toFixed(2)} (drift $${drift.toFixed(2)})`);
         engine.riskState.startCapital = realBalances.spotUSD;
         engine.capital = realBalances.spotUSD;
-        engine.cash    = realBalances.spotCash || realBalances.spotUSD;
+        engine.cash    = realBalances.spotCash ?? realBalances.spotUSD;
       }
     }
   } catch (e) {
@@ -1029,11 +1029,11 @@ async function start() {
   // 1. Fetch real Kraken balances
   await withRetry(() => refreshBalances(), 'refreshBalances');
   if (realBalances.spotUSD > 0) {
-    log.info(`Real Kraken balance: total $${realBalances.spotUSD.toFixed(2)}, cash $${(realBalances.spotCash || 0).toFixed(2)}`);
+    log.info(`Real Kraken balance: total $${realBalances.spotUSD.toFixed(2)}, cash $${(realBalances.spotCash ?? 0).toFixed(2)}`);
     // capital = total portfolio (for equity display)
     // cash = tradable cash only (for position sizing / order placement)
     engine.capital = realBalances.spotUSD;
-    engine.cash    = realBalances.spotCash || realBalances.spotUSD;
+    engine.cash    = realBalances.spotCash ?? realBalances.spotUSD;
     // startCapital = totale portfolio (cash + holdings), NIET alleen cash.
     // Met open posities is spotCash laag ($4.58) maar totale waarde is $199.
     // Kill switch en drawdown tracking moeten op totale waarde baseren.
