@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import {
-  CAPITAL, MAX_POS, MAX_DEPLOY, MAX_RISK_PER_TRADE,
+  CAPITAL, MAX_POS, MAX_DEPLOY, MAX_SINGLE_PCT, MAX_RISK_PER_TRADE,
   CONF_RISK, FEE_RATE,
   DAILY_LOSS_LIMIT_1, DAILY_LOSS_LIMIT_2,
   WEEKLY_LOSS_LIMIT_1, WEEKLY_LOSS_LIMIT_2,
@@ -187,9 +187,9 @@ export function canOpenPosition(state, assetId, currentPositions, now = Date.now
   // Signal cooldown after SL/TIME exit (prevent immediate re-entry into chop)
   const lastExit = state.lastExitTime?.[assetId];
   if (lastExit) {
-    // V16: cooldowns verkort (was 30/15 min — 6% van EU window verspild)
-    const cooldownMs = lastExit.reason === 'SL' ? (GROWTH_MODE ? 5 : COOLDOWN_SL_MIN) * 60 * 1000
-                     : lastExit.reason === 'TIME' ? (GROWTH_MODE ? 3 : COOLDOWN_TIME_MIN) * 60 * 1000
+    // V17b: gebruik geconfigureerde cooldown-waarden (GROWTH_MODE override negeerde de kortere V17b waarden)
+    const cooldownMs = lastExit.reason === 'SL'   ? COOLDOWN_SL_MIN   * 60 * 1000
+                     : lastExit.reason === 'TIME'  ? COOLDOWN_TIME_MIN * 60 * 1000
                      : 0; // No cooldown after TP (trend was right)
     if (cooldownMs > 0 && now - lastExit.timestamp < cooldownMs) {
       return { allowed: false, reason: `${assetId} cooldown after ${lastExit.reason} exit` };
@@ -294,8 +294,8 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   // Position quantity
   let qty = Math.max(0, feeAdjustedRisk / slDist);
 
-  // Max deploy cap
-  const maxNotional = capital * MAX_DEPLOY;
+  // Max deploy cap (total capital in any single position)
+  const maxNotional = Math.min(capital * MAX_DEPLOY, capital * MAX_SINGLE_PCT);
   const notional = qty * price;
   if (notional > maxNotional) {
     qty = maxNotional / price;

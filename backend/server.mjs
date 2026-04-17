@@ -874,6 +874,16 @@ function _rollbackPosition(assetId, pos) {
     engine.cash += pos.qty * pos.entry;
   }
   delete engine.positions[assetId];
+
+  // Remove the ghost entry trade log — prevents repeated failed entries from spamming trades[]
+  const entrySide = pos.side === 'short' ? 'SHORT' : 'BUY';
+  for (let i = engine.trades.length - 1; i >= 0; i--) {
+    if (engine.trades[i].id === assetId && engine.trades[i].side === entrySide) {
+      engine.trades.splice(i, 1);
+      break;
+    }
+  }
+
   log.warn(`Rolled back engine position for ${assetId}`);
 }
 
