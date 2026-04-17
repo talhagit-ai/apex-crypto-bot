@@ -734,10 +734,17 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
           log.signal(`DRY RUN SHORT PARTIAL: ${assetId}`, { qty: partialQty, price });
         }
       } else {
-        const partialResult = await orders.closePosition(assetId, partialQty, price, 'PARTIAL');
-        if (!partialResult) {
-          log.error(`Partial SELL ${assetId} failed — qty desync possible, reconciliation will fix`);
-          reportError(`Partial SELL ${assetId} gefaald — reconciliation corrigeert`);
+        // Cap partial qty op beschikbare Kraken holdings
+        const krakenQty = realBalances.holdings?.[assetId]?.qty ?? partialQty;
+        const safePartialQty = Math.min(partialQty, krakenQty);
+        if (safePartialQty <= 0) {
+          log.warn(`Partial SELL ${assetId} overgeslagen: Kraken heeft 0 (${krakenQty})`);
+        } else {
+          const partialResult = await orders.closePosition(assetId, safePartialQty, price, 'PARTIAL');
+          if (!partialResult) {
+            log.error(`Partial SELL ${assetId} failed — reconciliation corrigeert volgende cycle`);
+            reportError(`Partial SELL ${assetId} gefaald — reconciliation corrigeert`);
+          }
         }
       }
     }
@@ -781,8 +788,14 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
         }
       }
     } else {
-      log.signal(`REAL ORDER: SELL ${assetId}`, { qty: closeQty, reason });
-      const result = await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
+      // Cap closeQty op de werkelijke Kraken-holdings — beschermt tegen qty-mismatch door partial fills
+      const krakenQty = realBalances.holdings?.[assetId]?.qty ?? closeQty;
+      const safeCloseQty = krakenQty < closeQty * 0.995 ? krakenQty : closeQty;
+      if (safeCloseQty !== closeQty) {
+        log.warn(`SELL ${assetId}: capping qty ${closeQty} → ${safeCloseQty} (Kraken heeft minder)`);
+      }
+      log.signal(`REAL ORDER: SELL ${assetId}`, { qty: safeCloseQty, reason });
+      const result = await orders.closePosition(assetId, safeCloseQty, exitTrade.price, reason);
       if (result) {
         notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
       } else {
@@ -866,8 +879,18 @@ async function reconcilePositions() {
         log.warn(`RECONCILE: Engine has LONG ${assetId} (${pos.qty}) but Kraken has ${krakenHoldings[assetId] || 0} — removing phantom`);
         _rollbackPosition(assetId, pos);
         reportError(`Phantom LONG ${assetId} verwijderd (niet op Kraken)`);
-      } else if (krakenHoldings[assetId] < pos.qty * 0.80) {
-        log.warn(`RECONCILE WARNING: ${assetId} qty mismatch — engine=${pos.qty} kraken=${krakenHoldings[assetId]} (partial fill?)`);
+      } else if (krakenHoldings[assetId] < pos.qty * 0.995) {
+        // Qty mismatch: Kraken heeft minder dan engine verwacht (partial fill / fee rounding).
+        // Sync engine qty omlaag naar werkelijke Kraken qty zodat de volgende SELL niet faalt.
+        const asset = ASSETS.find(a => a.id === assetId);
+        const step  = asset?.qtyStep || 0.001;
+        const syncedQty = Math.floor(krakenHoldings[assetId] / step) * step;
+        log.warn(`RECONCILE: Syncing ${assetId} qty engine=${pos.qty} → kraken=${syncedQty} (was ${krakenHoldings[assetId]})`);
+        pos.qty = syncedQty;
+        if (syncedQty <= 0) {
+          _rollbackPosition(assetId, pos);
+          reportError(`RECONCILE: ${assetId} qty 0 na sync — positie verwijderd`);
+        }
       }
     }
 
