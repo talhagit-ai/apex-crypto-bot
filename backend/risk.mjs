@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import {
-  CAPITAL, MAX_POS, MAX_DEPLOY, MAX_SINGLE_PCT, MAX_RISK_PER_TRADE,
+  CAPITAL, MAX_POS, MAX_DEPLOY, MAX_SINGLE_PCT, MIN_ORDER_USD, MAX_RISK_PER_TRADE,
   CONF_RISK, FEE_RATE,
   DAILY_LOSS_LIMIT_1, DAILY_LOSS_LIMIT_2,
   WEEKLY_LOSS_LIMIT_1, WEEKLY_LOSS_LIMIT_2,
@@ -306,6 +306,9 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
 
   // Min qty check
   if (qty < asset.minQty) return 0;
+
+  // Minimum notional check — Kraken weigert orders onder ~$10 notional
+  if (qty * price < MIN_ORDER_USD) return 0;
 
   return qty;
 }

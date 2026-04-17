@@ -43,7 +43,7 @@ let tickTimer  = null; // fires engine tick when not all assets close in time
 let lastFallbackCheck = Date.now(); // for fallback tick timer
 
 // Real Kraken balances (refreshed every 60s)
-let realBalances = { spotEUR: null, futuresUSD: null, lastUpdated: null };
+let realBalances = { spotEUR: null, spotCash: 0, spotUSD: 0, futuresUSD: null, lastUpdated: null };
 
 // Futures readiness tracking (persisted across restarts via DB)
 let lastErrorTime        = null;   // timestamp of last real error (null = no errors)
@@ -66,7 +66,7 @@ const KRAKEN_ASSET_MAP = {
   'SOL':  'SOLUSDT', 'XXRP': 'XRPUSDT', 'XRP': 'XRPUSDT',
   'ADA':  'ADAUSDT', 'DOT': 'DOTUSD',   'LINK': 'LINKUSD',
   'AVAX': 'AVAXUSD', 'ATOM': 'ATOMUSD', 'UNI':  'UNIUSD',
-  'XLTC': 'LTCUSD',  'LTC': 'LTCUSD',  'XLTC': 'LTCUSD', 'POL':  'POLUSD',
+  'XLTC': 'LTCUSD',  'LTC': 'LTCUSD',  'POL':  'POLUSD',
   'XXDG': 'DOGEUSD', 'DOGE': 'DOGEUSD', 'ALGO': 'ALGOUSD',
   'NEAR': 'NEARUSD', 'FIL':  'FILUSD',  'AAVE': 'AAVEUSD',
   'GRT':  'GRTUSD',  'SNX':  'SNXUSD',  'CRV':  'CRVUSD',

@@ -30,6 +30,7 @@ export const CAPITAL    = Number(process.env.CAPITAL) || 100;
 export const MAX_POS    = 5;          // V17b: meer gelijktijdige posities (was 3)
 export const MAX_DEPLOY = 0.92;       // V13: benut meer kapitaal (was 0.80)
 export const MAX_SINGLE_PCT = 0.40;   // V17b: max 40% kapitaal per positie (voorkomt ADA/micro-ATR concentratie)
+export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10) — orders daaronder worden geweigerd
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
