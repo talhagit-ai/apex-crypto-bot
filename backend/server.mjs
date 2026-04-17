@@ -797,7 +797,14 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
       log.signal(`REAL ORDER: SELL ${assetId}`, { qty: safeCloseQty, reason });
       const result = await orders.closePosition(assetId, safeCloseQty, exitTrade.price, reason);
       if (result) {
-        notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
+        // Als safeCloseQty < closeQty: engine heeft te veel cash bijgeteld (pos.qty * price).
+        // Corrigeer het verschil zodat engine cash klopt met Kraken.
+        if (safeCloseQty < closeQty) {
+          const overshoot = (closeQty - safeCloseQty) * exitTrade.price;
+          engine.cash -= overshoot;
+          log.warn(`SELL ${assetId}: cash gecorrigeerd -$${overshoot.toFixed(2)} (qty cap ${closeQty}→${safeCloseQty})`);
+        }
+        notifySell(assetId, safeCloseQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
       } else {
         // SELL FAILED — positie terugzetten in engine zodat volgende tick opnieuw kan proberen
         log.error(`SELL ${assetId} FAILED — restoring position for retry next tick`);
@@ -1081,6 +1088,15 @@ async function start() {
 
   // 2. Fetch historical data
   await withRetry(() => buffer.init(), 'buffer.init');
+
+  // 2b. Herbereken balances nu prijzen beschikbaar zijn (holdings waarde = 0 was bij stap 1)
+  await refreshBalances();
+  if (realBalances.spotUSD > 0) {
+    log.info(`Post-buffer balance: total $${realBalances.spotUSD.toFixed(2)}, cash $${(realBalances.spotCash ?? 0).toFixed(2)}`);
+    engine.capital = realBalances.spotUSD;
+    engine.cash    = realBalances.spotCash ?? realBalances.spotUSD;
+    engine.riskState.startCapital = realBalances.spotUSD;
+  }
 
   // 3. Connect Kraken WebSocket streams
   kraken.connectWebSocket(onBarClose);
