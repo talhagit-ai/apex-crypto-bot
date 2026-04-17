@@ -372,6 +372,47 @@ app.post('/api/liquidate-orphans', async (_req, res) => {
   }
 });
 
+// POST /api/force-close/:asset — handmatig een positie sluiten (voor vastzittende posities)
+app.post('/api/force-close/:asset', async (req, res) => {
+  const assetId = req.params.asset;
+  const pos = engine.positions[assetId];
+  if (!pos) {
+    return res.status(404).json({ ok: false, err: `Geen open positie voor ${assetId}` });
+  }
+  if (pos.paperOnly) {
+    // Paper positie: gewoon verwijderen
+    delete engine.positions[assetId];
+    return res.json({ ok: true, msg: `Paper positie ${assetId} verwijderd` });
+  }
+  try {
+    const prices = buffer.currentPrices();
+    const price = prices[assetId] || pos.entry;
+    log.signal(`FORCE CLOSE: ${assetId}`, { qty: pos.qty, price });
+
+    if (pos.side === 'short') {
+      await futures.closeShort(assetId, pos.qty);
+      engine.cash += (pos.margin || 0) + pos.qty * (pos.entry - price);
+    } else {
+      const result = await orders.closePosition(assetId, pos.qty, price, 'FORCE_CLOSE');
+      if (!result) throw new Error('Order niet uitgevoerd');
+      engine.cash += pos.qty * (result.fillPrice || price);
+    }
+
+    const pnl = pos.side === 'short'
+      ? (pos.entry - price) * pos.qty
+      : (price - pos.entry) * pos.qty;
+
+    delete engine.positions[assetId];
+    notifySell(assetId, pos.qty, price, pnl, 'FORCE_CLOSE');
+    log.trade(`FORCE CLOSED ${assetId}`, { qty: pos.qty, price, pnl: +pnl.toFixed(2) });
+
+    res.json({ ok: true, asset: assetId, qty: pos.qty, price, pnl: +pnl.toFixed(2) });
+  } catch (e) {
+    log.error(`Force close ${assetId} failed`, { err: e.message });
+    res.status(500).json({ ok: false, err: e.message });
+  }
+});
+
 // ── Optimizer Endpoints ──────────────────────────────────────
 
 // Manual trigger: POST /optimize
@@ -519,11 +560,13 @@ async function runEngineTick() {
     regimeData[asset.id] = d1h || d5m; // fallback to 5m if 1h not ready
   }
 
-  // Snapshot state BEFORE tick to detect new entries/exits
+  // Snapshot state BEFORE tick to detect new entries/exits + recover from failed SELLs
   const prevPositions = new Set(Object.keys(engine.positions));
   const prevQtySnapshot = {};
+  const prevPositionData = {};  // Deep copy for SELL failure recovery
   for (const [id, p] of Object.entries(engine.positions)) {
     prevQtySnapshot[id] = p.qty;
+    prevPositionData[id] = { ...p };
   }
 
   // Run engine logic (signal gen, position management)
@@ -538,7 +581,7 @@ async function runEngineTick() {
   }).catch(() => {});
 
   // Detect changes and place real orders (or log in DRY_RUN mode)
-  await _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun);
+  await _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, barData, isDryRun);
 
   // Refresh real Kraken balances every tick
   await refreshBalances();
@@ -577,7 +620,7 @@ async function runEngineTick() {
  * Detect engine decisions and execute real orders on Kraken.
  * Handles: new entries, partial exits, full exits, order failure rollback.
  */
-async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
+async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, barData, isDryRun) {
   const isDryRunShorts = DRY_RUN_SHORTS && !isDryRun; // paper-trade shorts only
   const currentPositions = new Set(Object.keys(engine.positions));
 
@@ -691,7 +734,11 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
           log.signal(`DRY RUN SHORT PARTIAL: ${assetId}`, { qty: partialQty, price });
         }
       } else {
-        await orders.closePosition(assetId, partialQty, price, 'PARTIAL');
+        const partialResult = await orders.closePosition(assetId, partialQty, price, 'PARTIAL');
+        if (!partialResult) {
+          log.error(`Partial SELL ${assetId} failed — qty desync possible, reconciliation will fix`);
+          reportError(`Partial SELL ${assetId} gefaald — reconciliation corrigeert`);
+        }
       }
     }
 
@@ -736,7 +783,20 @@ async function _syncOrders(prevPositions, prevQtySnapshot, barData, isDryRun) {
     } else {
       log.signal(`REAL ORDER: SELL ${assetId}`, { qty: closeQty, reason });
       const result = await orders.closePosition(assetId, closeQty, exitTrade.price, reason);
-      notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
+      if (result) {
+        notifySell(assetId, closeQty, exitTrade.price, result?.pnl || exitTrade.pnl || 0, reason);
+      } else {
+        // SELL FAILED — positie terugzetten in engine zodat volgende tick opnieuw kan proberen
+        log.error(`SELL ${assetId} FAILED — restoring position for retry next tick`);
+        const savedPos = prevPositionData[assetId];
+        if (savedPos) {
+          engine.positions[assetId] = { ...savedPos };
+          // Cash terug aftrekken (engine had al cashReturn bijgeteld in _closePosition)
+          const cashReturn = savedPos.qty * exitTrade.price;
+          engine.cash -= cashReturn;
+        }
+        reportError(`SELL ${assetId} gefaald — positie hersteld, retry volgende tick`);
+      }
     }
   }
 }
@@ -967,9 +1027,10 @@ async function start() {
     // cash = tradable cash only (for position sizing / order placement)
     engine.capital = realBalances.spotUSD;
     engine.cash    = realBalances.spotCash || realBalances.spotUSD;
-    // startCapital baseline — set once at startup so kill switch / drawdown
-    // tracking stays accurate across the session.
-    engine.riskState.startCapital = realBalances.spotCash || realBalances.spotUSD;
+    // startCapital = totale portfolio (cash + holdings), NIET alleen cash.
+    // Met open posities is spotCash laag ($4.58) maar totale waarde is $199.
+    // Kill switch en drawdown tracking moeten op totale waarde baseren.
+    engine.riskState.startCapital = realBalances.spotUSD;
     // Reset kill switch if triggered in a previous session.
     // Kraken balance is source of truth: if account is funded, we can trade.
     if (engine.riskState.killed || engine.riskState.riskReduction === 0) {
