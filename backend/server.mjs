@@ -794,6 +794,13 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
           // Cash terug aftrekken (engine had al cashReturn bijgeteld in _closePosition)
           const cashReturn = savedPos.qty * exitTrade.price;
           engine.cash -= cashReturn;
+          // Ghost SELL entry verwijderen uit trades[] (was gelogd door _closePosition)
+          for (let i = engine.trades.length - 1; i >= 0; i--) {
+            if (engine.trades[i].id === assetId && ['SELL', 'COVER'].includes(engine.trades[i].side)) {
+              engine.trades.splice(i, 1);
+              break;
+            }
+          }
         }
         reportError(`SELL ${assetId} gefaald — positie hersteld, retry volgende tick`);
       }
