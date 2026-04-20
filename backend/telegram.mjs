@@ -11,24 +11,78 @@ const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // ── Outgoing Notifications ─────────────────────────────────────
 
-async function send(text, chatId = CHAT_ID) {
-  if (!TOKEN || !chatId) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-    });
-  } catch (_) {}
+// In-memory queue voor berichten die niet verzonden konden worden
+const sendQueue = [];
+const MAX_QUEUE = 50;
+
+async function _sendOnce(text, chatId) {
+  const resp = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status}: ${body.slice(0, 120)}`);
+  }
+  const data = await resp.json();
+  if (!data.ok) throw new Error(`Telegram: ${data.description || 'unknown'}`);
+  return data;
 }
 
-export function notifyBuy(assetId, qty, price, sl, tp, conf) {
+async function send(text, chatId = CHAT_ID, { retries = 3 } = {}) {
+  if (!TOKEN || !chatId) return false;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await _sendOnce(text, chatId);
+      // Bij succes: probeer queue te legen
+      while (sendQueue.length > 0) {
+        const q = sendQueue.shift();
+        try { await _sendOnce(q.text, q.chatId); }
+        catch { sendQueue.unshift(q); break; }
+      }
+      return true;
+    } catch (err) {
+      if (attempt === retries) {
+        log.warn(`Telegram send failed (final): ${err.message}`);
+        // Queue voor latere retry
+        if (sendQueue.length < MAX_QUEUE) {
+          sendQueue.push({ text, chatId, queuedAt: Date.now() });
+        }
+        return false;
+      }
+      await new Promise(r => setTimeout(r, 1000 * attempt * attempt));
+    }
+  }
+  return false;
+}
+
+// Periodiek queue proberen te legen (iedere 30s)
+setInterval(async () => {
+  if (!TOKEN || sendQueue.length === 0) return;
+  const item = sendQueue[0];
+  // Drop berichten ouder dan 1 uur
+  if (Date.now() - item.queuedAt > 60 * 60 * 1000) {
+    sendQueue.shift();
+    log.warn(`Dropped stale Telegram message (${Math.round((Date.now()-item.queuedAt)/60000)}min oud)`);
+    return;
+  }
+  try {
+    await _sendOnce(item.text, item.chatId);
+    sendQueue.shift();
+    log.info(`Flushed queued Telegram msg (${sendQueue.length} remaining)`);
+  } catch (_) { /* volgende keer opnieuw */ }
+}, 30_000);
+
+export function notifyBuy(assetId, qty, price, sl, tp, conf, score100) {
+  const slDist = ((price - sl) / price * 100).toFixed(2);
+  const tpDist = ((tp - price) / price * 100).toFixed(2);
+  const rr     = ((tp - price) / Math.max(price - sl, 1e-9)).toFixed(2);
   send(
     `🟢 <b>BUY ${assetId}</b>\n` +
-    `Prijs: $${price.toFixed(4)}\n` +
-    `Qty: ${qty}\n` +
-    `SL: $${sl.toFixed(4)} | TP: $${tp.toFixed(4)}\n` +
-    `Signaal: ${conf}/6 factoren`
+    `Prijs: $${price.toFixed(4)} | Qty: ${qty}\n` +
+    `SL: $${sl.toFixed(4)} (-${slDist}%) | TP: $${tp.toFixed(4)} (+${tpDist}%)\n` +
+    `R:R ${rr} | Score ${score100 ?? '?'}/100 (${conf}/6)`
   );
 }
 

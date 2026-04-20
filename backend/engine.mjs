@@ -159,16 +159,26 @@ export class TradingEngine {
         }
       }
 
-      // ── Pyramid Add-On (growth mode: add 50% size to winners) ──
+      // ── Pyramid Add-On (V19: alleen als statistieken dit rechtvaardigen) ──
+      // Conditions: partial1 genomen, growth mode, long, winst tussen 0.5R-1.5R,
+      // EN rolling win rate >= 55% over laatste 10 trades (anders: geen pyramid)
       if (this.opts.growthMode && pos.partial1Taken && !pos.pyramidAdded && !isShort && pnlR >= 0.5 && pnlR < 1.5) {
-        const addQty = this._roundQty(id, pos.qty * 0.50);
-        const addCost = addQty * cur;
-        if (addQty > 0 && addCost < this.cash * 0.30) {
-          this.cash -= addCost;
-          pos.qty += addQty;
-          pos.risk = pos.qty * Math.abs(pos.entry - pos.sl);
-          pos.pyramidAdded = true;
-          this._logTrade(id, 'PYRAMID', cur, addQty, null, null, `Add-on @ ${pnlR.toFixed(1)}R`);
+        const closed = this.trades.filter(t => ['SELL','COVER'].includes(t.side)).slice(-10);
+        const winRate = closed.length >= 5
+          ? closed.filter(t => (t.pnl || 0) > 0).length / closed.length
+          : 1.0; // onvoldoende data: default toestaan
+        const regime = this.regimes[id];
+        const regimeOk = regime === 'bull' || regime === undefined;
+        if (winRate >= 0.55 && regimeOk) {
+          const addQty = this._roundQty(id, pos.qty * 0.35); // V19: 35% (was 50%, veiliger bij klein cap)
+          const addCost = addQty * cur;
+          if (addQty > 0 && addCost < this.cash * 0.25) { // V19: 25% cash cap (was 30%)
+            this.cash -= addCost;
+            pos.qty += addQty;
+            pos.risk = pos.qty * Math.abs(pos.entry - pos.sl);
+            pos.pyramidAdded = true;
+            this._logTrade(id, 'PYRAMID', cur, addQty, null, null, `Add-on @ ${pnlR.toFixed(1)}R (winRate ${(winRate*100).toFixed(0)}%)`);
+          }
         }
       }
 
@@ -199,19 +209,22 @@ export class TradingEngine {
         }
       }
 
-      // ── Trailing Stop (adaptive by regime + volatility + age) ──
+      // ── Trailing Stop (V19: agressiever na 1.5R om winst te locken) ──
       if (pnlR >= this.T_R) {
         const regime = this.regimes[id];
         const vReg   = pos.volRegime || 'trending';
         const isStrongTrend = regime === 'bull' && pos.age < this.MBARS * 0.5;
-        // Base trail multiplier by trend strength
+        // Base trail multiplier
         let trailMult = isStrongTrend && pnlR > 1.5 ? this.T_ATR * 1.3
                       : isStrongTrend ? this.T_ATR
                       : this.T_ATR * 0.8;
-        // Volatility regime adjustment (V11: geïnverteerd — wider in chop, tighter in trend)
-        if (vReg === 'ranging')     trailMult *= 1.30;  // WIJDER in chop (bescherming tegen ruis)
-        if (vReg === 'clean_trend') trailMult *= 0.85;  // strakker in trend (slot winst sneller in)
-        // V17: trail decay verwijderd — tightening in laatste 20% sloot winners voortijdig (data: max win R=+0.63)
+        // V19: na +1.5R trail aanhalen (lock meer winst bij grote winners)
+        if (pnlR >= 1.5 && pnlR < 2.5) trailMult *= 0.80;
+        // V19: na +2.5R super tight trail (bijna zeker profit)
+        if (pnlR >= 2.5) trailMult *= 0.55;
+        // Volatility regime adjustment (V11: geïnverteerd)
+        if (vReg === 'ranging')     trailMult *= 1.30;  // WIJDER in chop
+        if (vReg === 'clean_trend') trailMult *= 0.85;  // strakker in trend
         if (isShort) {
           const newSl = cur + ATR * trailMult;
           if (newSl < pos.sl) pos.sl = newSl;
@@ -389,6 +402,7 @@ export class TradingEngine {
           margin: isShort ? cost * 0.10 : 0,
           conf: sig.conf,
           qualityScore: sig.qualityScore,
+          score100: sig.score100,
           factors: sig.factors,
           atrPercentile: sig.atrPercentile,
           volRegime: sig.volRegime,

@@ -189,6 +189,12 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   // ATR percentile for dynamic TP + volatility-adjusted sizing
   const atrPctile = atrPercentile(highs, lows, closes);
 
+  // V19: Anti-chop filter — reject extreme ATR percentiles hard
+  // Te lage ATR = geen beweging = fees eten winst op
+  // Te hoge ATR = whipsaw, SL wordt sneller geraakt
+  if (atrPctile < 8) return null;   // volledig dode markt
+  if (atrPctile > 92 && ADX < 28) return null;  // extreme vol zonder trend = chaos
+
   // ATR extremes = poor entry timing (quality penalty)
   if (atrPctile > 85) qualityScore -= 0.6;  // extreme vol = whipsaw risk
   if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;  // dead market chop

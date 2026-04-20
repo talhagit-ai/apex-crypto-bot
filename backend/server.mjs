@@ -699,7 +699,7 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
       if (fill) {
         pos.entry = fill.fillPrice;
         pos.peak = fill.fillPrice;
-        notifyBuy(assetId, pos.qty, fill.fillPrice, pos.sl, pos.tp, signal.conf || 3);
+        notifyBuy(assetId, pos.qty, fill.fillPrice, pos.sl, pos.tp, signal.conf || 3, pos.score100);
       } else {
         log.error(`Spot BUY FAILED — rolling back ${assetId}`);
         _rollbackPosition(assetId, pos, true);
