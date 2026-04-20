@@ -255,6 +255,23 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   const streak = Math.min(state.totalConsecutiveLosses || 0, 4);
   const dynamicMult = DYNAMIC_RISK[streak] ?? 1.0;
 
+  // V19: Kelly factor — schaal op basis van rolling win rate over laatste trades
+  // Formule: f* = (Win% - Loss%/R:R). Cap op [0.4, 1.4] om extreme sizing te vermijden.
+  let kellyMult = 1.0;
+  const closed = (state.recentTrades || []).filter(t => typeof t.pnl === 'number');
+  if (closed.length >= 5) {
+    const wins = closed.filter(t => t.win).length;
+    const losses = closed.length - wins;
+    const winRate = wins / closed.length;
+    const lossRate = 1 - winRate;
+    const rr = signal.rr || ((signal.tp && signal.sl && signal.price)
+      ? (signal.tp - signal.price) / Math.max(signal.price - signal.sl, 1e-9)
+      : 1.8);
+    const kelly = winRate - lossRate / Math.max(rr, 0.5);
+    // Half-Kelly (veiliger) + cap
+    kellyMult = Math.max(0.4, Math.min(1.4, 0.5 + kelly));
+  }
+
   // Peak hours multiplier
   let peakMult;
   if (opts.peakMult !== undefined) {
@@ -283,8 +300,8 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
     : (signal.regimeStrength || 1.0)
   ));
 
-  // Combined risk amount
-  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult;
+  // Combined risk amount (V19: Kelly multiplier toegevoegd)
+  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult;
 
   // Account for round-trip fees (V11: floor verlaagd van 80% naar 60% — realistischer)
   const qty_raw  = riskAmount / slDist;

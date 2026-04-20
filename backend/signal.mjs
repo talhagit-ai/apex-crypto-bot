@@ -207,11 +207,18 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   const minRR = opts.MIN_RR ?? MIN_RR;
   if (rr < minRR) return null;
 
+  // V19: score 0-100 (bouwlijst): EMA 25 + VWAP 20 + RSI 15 + MACD 15 + Vol 15 + RSIspd 10
+  const score100 = Math.round(
+    (f1 ? 25 : 0) + (f2 ? 20 : 0) + (f3 ? 15 : 0) +
+    (f4 ? 15 : 0) + (f5 ? 15 : 0) + (f6 ? 10 : 0)
+  );
+
   return {
     action: 'BUY',
     side:   'long',
     asset:  asset.id,
     conf, qualityScore: +qualityScore.toFixed(2), rr: +rr.toFixed(2),
+    score100,
     price: cur,
     sl:    +sl.toFixed(asset.pricePrecision),
     tp:    +tp.toFixed(asset.pricePrecision),

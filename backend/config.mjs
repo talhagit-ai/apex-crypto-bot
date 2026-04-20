@@ -34,7 +34,7 @@ export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
-export const MIN_RR     = 1.2;        // V17b: meer setups doorlaten (was 1.5)
+export const MIN_RR     = 1.8;        // V19: hard R:R limit (bouwlijst)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
 export const PARTIAL1_R   = 0.75;     // V18: later partial = minder fee-impact bij klein kapitaal (was 0.5)
@@ -118,8 +118,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
-    slM: 2.8,    // V17: 5m ATR basis (was 1.8 op 1H ATR)
-    tpM: 4.5,    // V17: 5m ATR basis, R:R=1.61 (was 3.0 op 1H ATR)
+    slM: 2.5,    // V19: tighter SL voor 1.80 R:R (was 2.8)
+    tpM: 4.6,    // V19: wider TP, R:R=1.84 (was 4.5, R:R=1.61)
     minQty: 0.00001,
     qtyStep: 0.00001,
     pricePrecision: 2,
@@ -135,8 +135,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.010,
     drift: 0.00040,
-    slM: 2.8,    // V17: 5m ATR basis (large cap)
-    tpM: 4.5,    // V17: R:R=1.61
+    slM: 2.5,    // V19: tighter SL voor 1.80 R:R
+    tpM: 4.6,    // V19: R:R=1.84 (was 4.5, R:R=1.61)
     minQty: 0.001,
     qtyStep: 0.001,
     pricePrecision: 2,
@@ -152,8 +152,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
-    slM: 2.5,    // V17: 5m ATR basis (mid cap)
-    tpM: 4.0,    // V17: R:R=1.60
+    slM: 2.3,    // V19: 5m ATR basis (mid cap) — R:R 1.83
+    tpM: 4.2,    // V19: R:R=1.83 (was 4.0, R:R=1.60)
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -169,8 +169,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 2.5,    // V17: 5m ATR basis (mid cap)
-    tpM: 4.0,    // V17: R:R=1.60
+    slM: 2.3,    // V19: 5m ATR basis (mid cap) — R:R 1.83
+    tpM: 4.2,    // V19: R:R=1.83 (was 4.0, R:R=1.60)
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -186,8 +186,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
-    slM: 2.5,    // V17: 5m ATR basis (mid cap)
-    tpM: 4.0,    // V17: R:R=1.60
+    slM: 2.3,    // V19: 5m ATR basis (mid cap) — R:R 1.83
+    tpM: 4.2,    // V19: R:R=1.83 (was 4.0, R:R=1.60)
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -204,8 +204,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
+    slM: 2.0,    // V19: tighter SL voor alts — R:R 1.85
+    tpM: 3.7,    // V19: R:R=1.85 (was 3.5, R:R=1.59)
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -221,8 +221,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
+    slM: 2.0,    // V19: tighter SL voor alts — R:R 1.85
+    tpM: 3.7,    // V19: R:R=1.85 (was 3.5, R:R=1.59)
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -238,8 +238,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
-    slM: 2.2,    // V17: 5m ATR basis (alt)
-    tpM: 3.5,    // V17: R:R=1.59
+    slM: 2.0,    // V19: tighter SL voor alts — R:R 1.85
+    tpM: 3.7,    // V19: R:R=1.85 (was 3.5, R:R=1.59)
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -286,7 +286,7 @@ export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
 // Faster exits, more trades
 export const GROWTH_TRAIL_R   = 0.5;    // V13: begin trail eerder (was 0.8)
 export const GROWTH_MAX_BARS  = 120;    // V17: 10h op 5m candles (was 60=5h — te kort voor 5m ATR TP)
-export const GROWTH_MIN_RR    = 1.2;    // V17: meer setups doorlaten (was 1.8 — blokkeerde alles met V17 R:R=1.59)
+export const GROWTH_MIN_RR    = 1.8;    // V19: hard 1.8:1 R:R — asset tpM/slM aangepast om ~1.83 te halen
 
 // Wider circuit breakers
 export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.060;  // V16: was 0.040

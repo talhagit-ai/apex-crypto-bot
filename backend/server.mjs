@@ -947,15 +947,17 @@ async function reconcilePositions() {
       }
     }
 
-    // V17: sync engine startCapital/capital/cash met Kraken truth wanneer flat (geen open spot posities)
+    // V19: sync engine cash/capital met Kraken (altijd).
+    // startCapital alleen OMHOOG bij externe deposits — nooit naar beneden bij verliezen
+    // (anders gaat PnL-baseline verloren en kan kill switch niet triggeren).
     const openSpotPositions = Object.values(engine.positions).filter(p => p.side !== 'short' && !p.paperOnly);
     if (openSpotPositions.length === 0 && realBalances.spotUSD > 0) {
-      const drift = Math.abs(realBalances.spotUSD - engine.riskState.startCapital);
-      if (drift > engine.riskState.startCapital * 0.01) {
-        log.warn(`V17 Reconcile: syncing startCapital $${engine.riskState.startCapital.toFixed(2)} → $${realBalances.spotUSD.toFixed(2)} (drift $${drift.toFixed(2)})`);
+      engine.capital = realBalances.spotUSD;
+      engine.cash    = realBalances.spotCash ?? realBalances.spotUSD;
+      // Detecteer externe deposit: spotUSD > startCapital + 5% → user heeft geld toegevoegd
+      if (realBalances.spotUSD > engine.riskState.startCapital * 1.05) {
+        log.warn(`V19 Reconcile: deposit gedetecteerd — startCapital $${engine.riskState.startCapital.toFixed(2)} → $${realBalances.spotUSD.toFixed(2)}`);
         engine.riskState.startCapital = realBalances.spotUSD;
-        engine.capital = realBalances.spotUSD;
-        engine.cash    = realBalances.spotCash ?? realBalances.spotUSD;
       }
     }
   } catch (e) {
