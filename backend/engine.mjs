@@ -143,19 +143,8 @@ export class TradingEngine {
           pos.risk = pos.qty * Math.abs(pos.entry - pos.sl); // Update risk after partial
           pos.partial1Taken = true;
           this._logTrade(id, 'PARTIAL1', cur, pqty, pnl, this.P1_R, `Partial @ ${this.P1_R}R`);
-
-          // Breakeven SL met kussentje (V11: entry + 0.25R i.p.v. exact entry)
-          const regime = this.regimes[id];
-          const isChoppy = regime === 'neutral' || regime === 'bear';
-          const slDist = Math.abs(pos.entry - pos.originalSl);
-          const cushion = slDist * 0.25; // 0.25R boven/onder entry als buffer
-          if (isShort) {
-            const beLevel = isChoppy ? pos.entry - cushion : pos.originalSl - (pos.originalSl - pos.entry) * 0.5;
-            if (beLevel < pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
-          } else {
-            const beLevel = isChoppy ? pos.entry + cushion : pos.originalSl + (pos.entry - pos.originalSl) * 0.5;
-            if (beLevel > pos.sl) { pos.sl = beLevel; pos.breakeven = true; }
-          }
+          // V20: GEEN breakeven SL meer bij partial1 — geeft trade volledige ruimte
+          // om TP te bereiken ipv premature SL-exit op 5m ruis
         }
       }
 
@@ -203,28 +192,25 @@ export class TradingEngine {
           pos.partial2Taken = true;
           this._logTrade(id, 'PARTIAL2', cur, pqty, pnl, this.P2_R, `Partial @ ${this.P2_R}R`);
 
-          // Full breakeven SL — runner is risk-free
+          // V20: Breakeven SL pas NA partial2 (+1.5R) — niet na partial1
+          // Runner is dan ~50% risk-free want +1.0R al binnen
           if (isShort) { if (pos.entry < pos.sl) pos.sl = pos.entry; }
           else         { if (pos.entry > pos.sl) pos.sl = pos.entry; }
         }
       }
 
-      // ── Trailing Stop (V19: agressiever na 1.5R om winst te locken) ──
+      // ── Trailing Stop (V20: pas vanaf +1R, geen tightening tot +3R) ──
       if (pnlR >= this.T_R) {
         const regime = this.regimes[id];
         const vReg   = pos.volRegime || 'trending';
         const isStrongTrend = regime === 'bull' && pos.age < this.MBARS * 0.5;
-        // Base trail multiplier
-        let trailMult = isStrongTrend && pnlR > 1.5 ? this.T_ATR * 1.3
-                      : isStrongTrend ? this.T_ATR
-                      : this.T_ATR * 0.8;
-        // V19: na +1.5R trail aanhalen (lock meer winst bij grote winners)
-        if (pnlR >= 1.5 && pnlR < 2.5) trailMult *= 0.80;
-        // V19: na +2.5R super tight trail (bijna zeker profit)
-        if (pnlR >= 2.5) trailMult *= 0.55;
-        // Volatility regime adjustment (V11: geïnverteerd)
+        // Wijde basis: geef winner ademruimte — liever full TP dan vroeg SL
+        let trailMult = isStrongTrend ? this.T_ATR : this.T_ATR * 0.9;
+        // V20: pas na +3R locken (echte home-runs) — daarvoor geen choking
+        if (pnlR >= 3.0) trailMult *= 0.70;
+        // Volatility regime adjustment
         if (vReg === 'ranging')     trailMult *= 1.30;  // WIJDER in chop
-        if (vReg === 'clean_trend') trailMult *= 0.85;  // strakker in trend
+        if (vReg === 'clean_trend') trailMult *= 0.90;  // licht strakker in trend
         if (isShort) {
           const newSl = cur + ATR * trailMult;
           if (newSl < pos.sl) pos.sl = newSl;

@@ -37,12 +37,12 @@ export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 —
 export const MIN_RR     = 1.8;        // V19: hard R:R limit (bouwlijst)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 0.75;     // V18: later partial = minder fee-impact bij klein kapitaal (was 0.5)
-export const PARTIAL1_PCT = 0.30;     // V16: pak 30% (was 25%)
-export const PARTIAL2_R   = 1.0;      // V16: tweede partial bij 1.0R (was 1.5 — met lagere tpM is dit de halfway)
-export const PARTIAL2_PCT = 0.20;     // behouden
-export const TRAIL_R      = 0.8;      // V16: begin trail bij 0.8R (was 1.2 — eerder winst veiligstellen)
-export const TRAIL_ATR    = 1.5;      // V18: strakkere trail bij klein kapitaal (was 2.0 — pak winst eerder)
+export const PARTIAL1_R   = 1.0;      // V20: later partial (was 0.75 — premature exit op 5m ruis)
+export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner (was 0.30)
+export const PARTIAL2_R   = 1.5;      // V20: tweede partial veel later (was 1.0)
+export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
+export const TRAIL_R      = 1.0;      // V20: trail pas na +1R (was 0.8 — voorkomt choking)
+export const TRAIL_ATR    = 2.0;      // V20: wijdere trail (was 1.5 — ruimte voor 5m ruis)
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
@@ -118,8 +118,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
-    slM: 2.5,    // V19: tighter SL voor 1.80 R:R (was 2.8)
-    tpM: 4.6,    // V19: wider TP, R:R=1.84 (was 4.5, R:R=1.61)
+    slM: 2.8,    // V20: wijder SL (buiten 5m ruis) — was 2.5
+    tpM: 5.2,    // V20: R:R=1.86 (was 4.6)
     minQty: 0.00001,
     qtyStep: 0.00001,
     pricePrecision: 2,
@@ -135,8 +135,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.010,
     drift: 0.00040,
-    slM: 2.5,    // V19: tighter SL voor 1.80 R:R
-    tpM: 4.6,    // V19: R:R=1.84 (was 4.5, R:R=1.61)
+    slM: 2.8,    // V20: wijder SL (buiten 5m ruis)
+    tpM: 5.2,    // V20: R:R=1.86
     minQty: 0.001,
     qtyStep: 0.001,
     pricePrecision: 2,
@@ -152,8 +152,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
-    slM: 2.3,    // V19: 5m ATR basis (mid cap) — R:R 1.83
-    tpM: 4.2,    // V19: R:R=1.83 (was 4.0, R:R=1.60)
+    slM: 2.6,    // V20: wijder SL (mid cap, buiten ruis)
+    tpM: 4.8,    // V20: R:R=1.85
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -169,8 +169,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 2.3,    // V19: 5m ATR basis (mid cap) — R:R 1.83
-    tpM: 4.2,    // V19: R:R=1.83 (was 4.0, R:R=1.60)
+    slM: 2.6,    // V20: wijder SL (mid cap, buiten ruis)
+    tpM: 4.8,    // V20: R:R=1.85
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -186,8 +186,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
-    slM: 2.3,    // V19: 5m ATR basis (mid cap) — R:R 1.83
-    tpM: 4.2,    // V19: R:R=1.83 (was 4.0, R:R=1.60)
+    slM: 2.6,    // V20: wijder SL (mid cap, buiten ruis)
+    tpM: 4.8,    // V20: R:R=1.85
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -204,8 +204,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 2.0,    // V19: tighter SL voor alts — R:R 1.85
-    tpM: 3.7,    // V19: R:R=1.85 (was 3.5, R:R=1.59)
+    slM: 2.3,    // V20: wijder SL voor volatile alts
+    tpM: 4.2,    // V20: R:R=1.83
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -221,8 +221,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
-    slM: 2.0,    // V19: tighter SL voor alts — R:R 1.85
-    tpM: 3.7,    // V19: R:R=1.85 (was 3.5, R:R=1.59)
+    slM: 2.3,    // V20: wijder SL voor volatile alts
+    tpM: 4.2,    // V20: R:R=1.83
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -238,8 +238,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
-    slM: 2.0,    // V19: tighter SL voor alts — R:R 1.85
-    tpM: 3.7,    // V19: R:R=1.85 (was 3.5, R:R=1.59)
+    slM: 2.3,    // V20: wijder SL voor volatile alts
+    tpM: 4.2,    // V20: R:R=1.83
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -284,7 +284,7 @@ export const GROWTH_CONF_RISK = {
 export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
 
 // Faster exits, more trades
-export const GROWTH_TRAIL_R   = 0.5;    // V13: begin trail eerder (was 0.8)
+export const GROWTH_TRAIL_R   = 1.0;    // V20: trail pas na +1R (was 0.5 — chokete winners)
 export const GROWTH_MAX_BARS  = 120;    // V17: 10h op 5m candles (was 60=5h — te kort voor 5m ATR TP)
 export const GROWTH_MIN_RR    = 1.8;    // V19: hard 1.8:1 R:R — asset tpM/slM aangepast om ~1.83 te halen
 
