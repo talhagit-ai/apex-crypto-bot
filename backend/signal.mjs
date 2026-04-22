@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence, detectBreakout } from './indicators.mjs';
-import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX, VR_THRESHOLD } from './config.mjs';
+import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX, VR_THRESHOLD, FEE_RATE } from './config.mjs';
 
 // ── Regime Filters ─────────────────────────────────────────────
 
@@ -157,13 +157,18 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (rs.weakening) qualityScore -= 0.4;
   if (rs.strengthening) qualityScore += 0.3;
 
-  // 15m confirmation layer: bonus if 15m EMA stack aligned with 5m signal
+  // V21: 15m HARD gate (NFIX-inspired) — voorkomt signals tegen 15m trend
+  // Bonus bij aligned, REJECT als 15m sterk bearish
   if (tf15Data && tf15Data.closes.length >= 30) {
     const e8_15  = ema(tf15Data.closes, 8);
     const e21_15 = ema(tf15Data.closes, 21);
     const n15    = tf15Data.closes.length - 1;
-    if (e8_15[n15] > e21_15[n15]) qualityScore += 0.5;  // 15m aligned bullish
-    else                            qualityScore -= 0.2;  // 15m against long signal
+    const aligned = e8_15[n15] > e21_15[n15];
+    // HARD gate: 15m trend tegen long + spread > 0.5% = reject
+    const spread = (e21_15[n15] - e8_15[n15]) / e21_15[n15];
+    if (!aligned && spread > 0.005) return null;
+    if (aligned) qualityScore += 0.5;
+    else          qualityScore -= 0.3;
   }
 
   // Divergence quality adjustment
@@ -212,6 +217,12 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
 
   const minRR = opts.MIN_RR ?? MIN_RR;
   if (rr < minRR) return null;
+
+  // V21: Fee-aware filter (NFIX-inspired) — TP-afstand moet > 3× round-trip fee zijn
+  // Voorkomt entries waar fees ~25%+ van winst opeten
+  const feeCost = 2 * FEE_RATE;  // round-trip als % van notional
+  const tpPct = tpDist / cur;    // TP-afstand als % van prijs
+  if (tpPct < feeCost * 3) return null;
 
   // V19: score 0-100 (bouwlijst): EMA 25 + VWAP 20 + RSI 15 + MACD 15 + Vol 15 + RSIspd 10
   const score100 = Math.round(
@@ -324,13 +335,16 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (rs.weakening) qualityScore -= 0.4;
   if (rs.strengthening) qualityScore += 0.3;
 
-  // 15m confirmation layer: bonus if 15m EMA stack aligned with short signal
+  // V21: 15m HARD gate voor shorts (tegen bullish 15m trend = reject)
   if (tf15Data && tf15Data.closes.length >= 30) {
     const e8_15  = ema(tf15Data.closes, 8);
     const e21_15 = ema(tf15Data.closes, 21);
     const n15    = tf15Data.closes.length - 1;
-    if (e8_15[n15] < e21_15[n15]) qualityScore += 0.5;  // 15m aligned bearish
-    else                            qualityScore -= 0.2;  // 15m against short signal
+    const aligned = e8_15[n15] < e21_15[n15];
+    const spread = (e8_15[n15] - e21_15[n15]) / e21_15[n15];
+    if (!aligned && spread > 0.005) return null;
+    if (aligned) qualityScore += 0.5;
+    else          qualityScore -= 0.3;
   }
 
   // Divergence quality adjustment
@@ -373,6 +387,11 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
 
   const minRR = opts.MIN_RR ?? MIN_RR;
   if (rr < minRR) return null;
+
+  // V21: Fee-aware filter voor shorts
+  const feeCost = 2 * FEE_RATE;
+  const tpPct = tpDist / cur;
+  if (tpPct < feeCost * 3) return null;
 
   return {
     action: 'SELL',

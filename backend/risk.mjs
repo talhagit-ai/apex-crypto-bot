@@ -256,20 +256,27 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   const dynamicMult = DYNAMIC_RISK[streak] ?? 1.0;
 
   // V19: Kelly factor — schaal op basis van rolling win rate over laatste trades
-  // Formule: f* = (Win% - Loss%/R:R). Cap op [0.4, 1.4] om extreme sizing te vermijden.
   let kellyMult = 1.0;
   const closed = (state.recentTrades || []).filter(t => typeof t.pnl === 'number');
   if (closed.length >= 5) {
     const wins = closed.filter(t => t.win).length;
-    const losses = closed.length - wins;
     const winRate = wins / closed.length;
     const lossRate = 1 - winRate;
     const rr = signal.rr || ((signal.tp && signal.sl && signal.price)
       ? (signal.tp - signal.price) / Math.max(signal.price - signal.sl, 1e-9)
       : 1.8);
     const kelly = winRate - lossRate / Math.max(rr, 0.5);
-    // Half-Kelly (veiliger) + cap
     kellyMult = Math.max(0.4, Math.min(1.4, 0.5 + kelly));
+  }
+
+  // V21: BTC cascade sizing (NFIX-inspired) — niet binair, maar gradueel
+  // Als signal.btcContext beschikbaar is (uit engine), schaal position op BTC momentum
+  let btcMult = 1.0;
+  if (signal.btcChange1h !== undefined && signal.asset !== 'BTCUSDT') {
+    const c1h = signal.btcChange1h;
+    if      (c1h < -0.015) btcMult = 0.5;   // BTC -1.5% in 1h → halveer alt sizing
+    else if (c1h < -0.008) btcMult = 0.75;  // BTC -0.8% → 25% kleiner
+    else if (c1h > 0.02)   btcMult = 1.10;  // BTC +2% sterk bull → 10% boost
   }
 
   // Peak hours multiplier
@@ -300,8 +307,8 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
     : (signal.regimeStrength || 1.0)
   ));
 
-  // Combined risk amount (V19: Kelly multiplier toegevoegd)
-  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult;
+  // Combined risk amount (V21: BTC cascade multiplier toegevoegd)
+  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult * btcMult;
 
   // Account for round-trip fees (V11: floor verlaagd van 80% naar 60% — realistischer)
   const qty_raw  = riskAmount / slDist;

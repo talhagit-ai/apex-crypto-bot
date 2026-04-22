@@ -199,8 +199,13 @@ export class TradingEngine {
         }
       }
 
-      // ── Trailing Stop (V20: pas vanaf +1R, geen tightening tot +3R) ──
-      if (pnlR >= this.T_R) {
+      // ── V21 Trade-duration SL shield (NFIX-inspired) ──
+      // Eerste 3 bars (15 min): GEEN trailing. Voorkomt "entry shock" whipsaw.
+      // Bars 3-12 (15-60 min): normale trail. Bars 12+: normale trail (V20 regel).
+      const allowTrail = pos.age >= 3;
+
+      // ── Trailing Stop (V20/V21: pas vanaf +1R, geen tightening tot +3R, niet in eerste 3 bars) ──
+      if (allowTrail && pnlR >= this.T_R) {
         const regime = this.regimes[id];
         const vReg   = pos.volRegime || 'trending';
         const isStrongTrend = regime === 'bull' && pos.age < this.MBARS * 0.5;
@@ -246,8 +251,9 @@ export class TradingEngine {
 
     if (openPositions.length < MAX_POS) {
       // V18: BTC cross-asset regime filter: block alt longs als BTC > 3% daalt in 4h
-      // Verscherpt van -5% → -3% (bij $197 kapitaal is elke alt-correlatie verlies te duur)
+      // V21: compute BTC 1h change ook, voor BTC cascade sizing
       let btcRegimeBlock = false;
+      let btcChange1h = 0;
       const btcData = barData['BTCUSDT'];
       if (btcData?.closes?.length >= 48) {
         const btcNow  = btcData.closes[btcData.closes.length - 1];
@@ -256,6 +262,11 @@ export class TradingEngine {
           btcRegimeBlock = true;
           log.info('BTC regime block: BTC down >3% in 4h — blocking alt longs');
         }
+      }
+      if (btcData?.closes?.length >= 12) {
+        const btcNow   = btcData.closes[btcData.closes.length - 1];
+        const btc1hAgo = btcData.closes[btcData.closes.length - 12];
+        btcChange1h = (btcNow - btc1hAgo) / btc1hAgo;
       }
 
       // Generate signals and sort by confidence (best first)
@@ -292,6 +303,7 @@ export class TradingEngine {
               sig.qualityScore *= learnMult;
               sig.learnMult = +learnMult.toFixed(2);
             }
+            sig.btcChange1h = btcChange1h;
             candidates.push({ asset: assetCfg, sig });
           }
         }
@@ -308,6 +320,7 @@ export class TradingEngine {
               sig.qualityScore *= learnMult;
               sig.learnMult = +learnMult.toFixed(2);
             }
+            sig.btcChange1h = btcChange1h;
             candidates.push({ asset: assetCfg, sig });
           }
         }
