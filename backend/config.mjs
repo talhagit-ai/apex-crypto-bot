@@ -37,9 +37,9 @@ export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 —
 export const MIN_RR     = 1.8;        // V19: hard R:R limit (bouwlijst)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 1.0;      // V20: later partial (was 0.75 — premature exit op 5m ruis)
-export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner (was 0.30)
-export const PARTIAL2_R   = 1.5;      // V20: tweede partial veel later (was 1.0)
+export const PARTIAL1_R   = 1.25;     // V22: hyperopt winner — laat winners langer lopen (was 1.0)
+export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner
+export const PARTIAL2_R   = 1.75;     // V22: hyperopt winner (was 1.5)
 export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
 export const TRAIL_R      = 1.0;      // V20: trail pas na +1R (was 0.8 — voorkomt choking)
 export const TRAIL_ATR    = 2.0;      // V20: wijdere trail (was 1.5 — ruimte voor 5m ruis)
