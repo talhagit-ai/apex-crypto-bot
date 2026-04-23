@@ -290,12 +290,10 @@ export class TradingEngine {
         // ── Try LONG ──────────────────────────────────────────
         const bullRegime = checkRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         const d15 = tf15Data?.[asset.id] || null;
-        // V12: gebruik confirmed regime (hysteresis) voor entries, niet raw
         const confirmedRegime = this.regimes[asset.id];
         if (bullRegime && confirmedRegime === 'bull') {
           const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
           if (sig) {
-            // Self-learning: adjust quality based on historical performance
             if (this.learningEngine) {
               const learnMult = this.learningEngine.scoreSignal(
                 asset.id, new Date().getUTCHours(), 'bull', sig.volRegime, sig.conf, sig.factors
