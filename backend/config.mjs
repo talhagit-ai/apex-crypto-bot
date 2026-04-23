@@ -34,15 +34,15 @@ export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
-export const MIN_RR     = 1.8;        // V19: hard R:R limit (bouwlijst)
+export const MIN_RR     = 2.0;        // V23: hyperopt bewijst 2.0 > 1.8 consistent (top 10 allemaal 2.0)
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 1.25;     // V22: hyperopt winner — laat winners langer lopen (was 1.0)
+export const PARTIAL1_R   = 0.75;     // V23: hyperopt 90d winner (+8.15% return, PF 1.14)
 export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner
-export const PARTIAL2_R   = 1.75;     // V22: hyperopt winner (was 1.5)
+export const PARTIAL2_R   = 1.25;     // V23: hyperopt 90d winner
 export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
-export const TRAIL_R      = 1.0;      // V20: trail pas na +1R (was 0.8 — voorkomt choking)
-export const TRAIL_ATR    = 2.0;      // V20: wijdere trail (was 1.5 — ruimte voor 5m ruis)
+export const TRAIL_R      = 1.0;      // V20/V23: trail start na +1R — bevestigd in hyperopt
+export const TRAIL_ATR    = 2.0;      // V20/V23: ATR 2.0 — bevestigd in hyperopt
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
@@ -118,8 +118,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.008,
     drift: 0.00032,
-    slM: 2.8,    // V20: wijder SL (buiten 5m ruis) — was 2.5
-    tpM: 5.2,    // V20: R:R=1.86 (was 4.6)
+    slM: 2.8,    // V20: wijder SL (buiten 5m ruis)
+    tpM: 5.7,    // V23: R:R=2.04 (hyperopt winner)
     minQty: 0.00001,
     qtyStep: 0.00001,
     pricePrecision: 2,
@@ -136,7 +136,7 @@ export const ASSETS = [
     vol: 0.010,
     drift: 0.00040,
     slM: 2.8,    // V20: wijder SL (buiten 5m ruis)
-    tpM: 5.2,    // V20: R:R=1.86
+    tpM: 5.7,    // V23: R:R=2.04
     minQty: 0.001,
     qtyStep: 0.001,
     pricePrecision: 2,
@@ -152,8 +152,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.015,
     drift: 0.00040,
-    slM: 2.6,    // V20: wijder SL (mid cap, buiten ruis)
-    tpM: 4.8,    // V20: R:R=1.85
+    slM: 2.6,    // V20: wijder SL (mid cap)
+    tpM: 5.3,    // V23: R:R=2.04
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -169,8 +169,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.012,
     drift: 0.00035,
-    slM: 2.6,    // V20: wijder SL (mid cap, buiten ruis)
-    tpM: 4.8,    // V20: R:R=1.85
+    slM: 2.6,    // V20: wijder SL (mid cap)
+    tpM: 5.3,    // V23: R:R=2.04
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -186,8 +186,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.014,
     drift: 0.00038,
-    slM: 2.6,    // V20: wijder SL (mid cap, buiten ruis)
-    tpM: 4.8,    // V20: R:R=1.85
+    slM: 2.6,    // V20: wijder SL (mid cap)
+    tpM: 5.3,    // V23: R:R=2.04
     minQty: 1,
     qtyStep: 0.1,
     pricePrecision: 4,
@@ -204,8 +204,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.020,
     drift: 0.00042,
-    slM: 2.3,    // V20: wijder SL voor volatile alts
-    tpM: 4.2,    // V20: R:R=1.83
+    slM: 2.3,    // V20: wijder SL voor alts
+    tpM: 4.7,    // V23: R:R=2.04
     minQty: 0.1,
     qtyStep: 0.1,
     pricePrecision: 3,
@@ -221,8 +221,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.022,
     drift: 0.00045,
-    slM: 2.3,    // V20: wijder SL voor volatile alts
-    tpM: 4.2,    // V20: R:R=1.83
+    slM: 2.3,    // V20: wijder SL voor alts
+    tpM: 4.7,    // V23: R:R=2.04
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -238,8 +238,8 @@ export const ASSETS = [
     category: MODE,
     vol: 0.018,
     drift: 0.00035,
-    slM: 2.3,    // V20: wijder SL voor volatile alts
-    tpM: 4.2,    // V20: R:R=1.83
+    slM: 2.3,    // V20: wijder SL voor alts
+    tpM: 4.7,    // V23: R:R=2.04
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -286,7 +286,7 @@ export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
 // Faster exits, more trades
 export const GROWTH_TRAIL_R   = 1.0;    // V20: trail pas na +1R (was 0.5 — chokete winners)
 export const GROWTH_MAX_BARS  = 120;    // V17: 10h op 5m candles (was 60=5h — te kort voor 5m ATR TP)
-export const GROWTH_MIN_RR    = 1.8;    // V19: hard 1.8:1 R:R — asset tpM/slM aangepast om ~1.83 te halen
+export const GROWTH_MIN_RR    = 2.0;    // V23: hyperopt winner — stricter pays off
 
 // Wider circuit breakers
 export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.060;  // V16: was 0.040
