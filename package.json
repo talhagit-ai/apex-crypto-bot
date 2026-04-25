@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "server": "node backend/server.mjs",
     "sim": "node scripts/sim_crypto.mjs",
-    "backtest": "node scripts/backtest.mjs"
+    "backtest": "node scripts/backtest.mjs",
+    "hyperopt": "LOG_LEVEL=warn node backend/hyperopt-ext.mjs",
+    "diag": "LOG_LEVEL=warn node backend/diag-per-asset.mjs",
+    "validate": "LOG_LEVEL=warn node backend/test-current-config.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
