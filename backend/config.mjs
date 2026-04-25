@@ -35,15 +35,15 @@ export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10
 
 // ── Signal Requirements ────────────────────────────────────────
 export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
-export const MIN_RR     = 2.0;        // V23: hyperopt bewijst 2.0 > 1.8 consistent (top 10 allemaal 2.0)
+export const MIN_RR     = 1.5;        // V26: walk-forward robust winner. V25 (RR=2.0) scoort test=-1.45% out-of-sample, RR=1.5 scoort test=+1.2%. Recent regime tolereert losser RR.
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
-export const PARTIAL1_R   = 0.75;     // V23: hyperopt 90d winner (+8.15% return, PF 1.14)
+export const PARTIAL1_R   = 1.5;      // V26: walk-forward robust winner — laat winners langer lopen voor partial. V25 (P1=0.75) was gefit op train, faalde op test.
 export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner
-export const PARTIAL2_R   = 1.25;     // V23: hyperopt 90d winner
+export const PARTIAL2_R   = 2.0;      // V26: PARTIAL1_R + 0.5
 export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
-export const TRAIL_R      = 0.8;      // V25: hyperopt op 3-asset set (SOL/AVAX/DOGE) toont 0.8 > 1.0 (PF 1.0 vs 0.78)
-export const TRAIL_ATR    = 1.5;      // V25: hyperopt op 3-asset set toont 1.5 > 2.0 (return +6.19% vs +2.18%)
+export const TRAIL_R      = 0.8;      // V25/V26: hyperopt 0.8 stabiel beste over train+test (out-of-sample bevestigd)
+export const TRAIL_ATR    = 1.5;      // V25/V26: walk-forward bevestigt 1.5 > 2.0/2.5 op test slice
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
@@ -223,9 +223,9 @@ export const GROWTH_CONF_RISK = {
 export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
 
 // Faster exits, more trades
-export const GROWTH_TRAIL_R   = 1.0;    // V20: trail pas na +1R (was 0.5 — chokete winners)
+export const GROWTH_TRAIL_R   = 0.8;    // V26: align met TRAIL_R (walk-forward bevestigt 0.8 stabiel)
 export const GROWTH_MAX_BARS  = 120;    // V17: 10h op 5m candles (was 60=5h — te kort voor 5m ATR TP)
-export const GROWTH_MIN_RR    = 2.0;    // V23: hyperopt winner — stricter pays off
+export const GROWTH_MIN_RR    = 1.5;    // V26: walk-forward toont RR=1.5 > 2.0 op test slice in recent regime
 
 // Wider circuit breakers
 export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.060;  // V16: was 0.040
