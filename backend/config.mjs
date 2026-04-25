@@ -42,8 +42,8 @@ export const PARTIAL1_R   = 0.75;     // V23: hyperopt 90d winner (+8.15% return
 export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner
 export const PARTIAL2_R   = 1.25;     // V23: hyperopt 90d winner
 export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
-export const TRAIL_R      = 1.0;      // V20/V23: trail start na +1R — bevestigd in hyperopt
-export const TRAIL_ATR    = 2.0;      // V20/V23: ATR 2.0 — bevestigd in hyperopt
+export const TRAIL_R      = 0.8;      // V25: hyperopt op 3-asset set (SOL/AVAX/DOGE) toont 0.8 > 1.0 (PF 1.0 vs 0.78)
+export const TRAIL_ATR    = 1.5;      // V25: hyperopt op 3-asset set toont 1.5 > 2.0 (return +6.19% vs +2.18%)
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
@@ -110,41 +110,26 @@ export const STREAK_MULT = {
 export const DYNAMIC_RISK = STREAK_MULT; // backward compat
 
 // ── Crypto Assets ──────────────────────────────────────────────
+// V25: per-asset diag (90d cache) toonde 5 verlies-assets aan.
+// Disabled: BTCUSDT, ETHUSDT, ADAUSDT, XRPUSDT, LINKUSD
+// Reason:  per-asset PnL was negatief in alle 5 (cumulatief -$9.89 over 90d).
+// Alleen AVAXUSD, SOLUSDT, DOGEUSD overgehouden — winners-only set
+// scoort +5.81% / PF 0.95 / WR 50% in backtest (vs full set -3.94% / PF 0.44).
+//
+// Ongebruikte definities behouden in commentaar zodat we ze later zonder
+// herontwerp kunnen reactiveren als het marktregime keert.
+//
+// /* DISABLED V25 — verlies-assets
+//   { id: 'BTCUSDT', symbol: 'BTCUSDT', krakenSymbol: 'BTC/USD', krakenPair: 'XBTUSD',
+//     category: MODE, vol: 0.008, drift: 0.00032, slM: 2.8, tpM: 5.2,
+//     minQty: 0.00001, qtyStep: 0.00001, pricePrecision: 2,
+//     color: '#f7931a', corrGroup: 'HIGH', regimeATR: 0.06 },
+//   { id: 'ETHUSDT', symbol: 'ETHUSDT', krakenSymbol: 'ETH/USD', krakenPair: 'ETHUSD',
+//     category: MODE, vol: 0.010, drift: 0.00040, slM: 2.8, tpM: 5.2,
+//     minQty: 0.001, qtyStep: 0.001, pricePrecision: 2,
+//     color: '#627eea', corrGroup: 'HIGH', regimeATR: 0.07 },
+// */
 export const ASSETS = [
-  {
-    id: 'BTCUSDT',
-    symbol: 'BTCUSDT',          // Sim symbol
-    krakenSymbol: 'BTC/USD',    // Kraken WebSocket symbol
-    krakenPair:   'XBTUSD',     // Kraken REST pair
-    category: MODE,
-    vol: 0.008,
-    drift: 0.00032,
-    slM: 2.8,    // V20: wijder SL (buiten 5m ruis)
-    tpM: 5.7,    // V23: R:R=2.04 (hyperopt winner)
-    minQty: 0.00001,
-    qtyStep: 0.00001,
-    pricePrecision: 2,
-    color: '#f7931a',
-    corrGroup: 'HIGH',
-    regimeATR: 0.06,
-  },
-  {
-    id: 'ETHUSDT',
-    symbol: 'ETHUSDT',
-    krakenSymbol: 'ETH/USD',
-    krakenPair:   'ETHUSD',
-    category: MODE,
-    vol: 0.010,
-    drift: 0.00040,
-    slM: 2.8,    // V20: wijder SL (buiten 5m ruis)
-    tpM: 5.7,    // V23: R:R=2.04
-    minQty: 0.001,
-    qtyStep: 0.001,
-    pricePrecision: 2,
-    color: '#627eea',
-    corrGroup: 'HIGH',
-    regimeATR: 0.07,
-  },
   {
     id: 'SOLUSDT',
     symbol: 'SOLUSDT',
@@ -154,7 +139,7 @@ export const ASSETS = [
     vol: 0.015,
     drift: 0.00040,
     slM: 2.6,    // V20: wijder SL (mid cap)
-    tpM: 5.3,    // V23: R:R=2.04
+    tpM: 4.8,    // V25: revert tpM (was 5.3)
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -162,58 +147,10 @@ export const ASSETS = [
     corrGroup: 'MED',
     regimeATR: 0.08,
   },
-  {
-    id: 'XRPUSDT',
-    symbol: 'XRPUSDT',
-    krakenSymbol: 'XRP/USD',
-    krakenPair:   'XRPUSD',
-    category: MODE,
-    vol: 0.012,
-    drift: 0.00035,
-    slM: 2.6,    // V20: wijder SL (mid cap)
-    tpM: 5.3,    // V23: R:R=2.04
-    minQty: 1,
-    qtyStep: 0.1,
-    pricePrecision: 4,
-    color: '#00aae4',
-    corrGroup: 'LOW',
-    regimeATR: 0.08,
-  },
-  {
-    id: 'ADAUSDT',
-    symbol: 'ADAUSDT',
-    krakenSymbol: 'ADA/USD',
-    krakenPair:   'ADAUSD',
-    category: MODE,
-    vol: 0.014,
-    drift: 0.00038,
-    slM: 2.6,    // V20: wijder SL (mid cap)
-    tpM: 5.3,    // V23: R:R=2.04
-    minQty: 1,
-    qtyStep: 0.1,
-    pricePrecision: 4,
-    color: '#0033ad',
-    corrGroup: 'SPEC',
-    regimeATR: 0.08,
-  },
-  // V18: DOT verwijderd (illiquide, hoge spread bij klein kapitaal)
-  {
-    id: 'LINKUSD',
-    symbol: 'LINKUSD',
-    krakenSymbol: 'LINK/USD',
-    krakenPair:   'LINKUSD',
-    category: MODE,
-    vol: 0.020,
-    drift: 0.00042,
-    slM: 2.3,    // V20: wijder SL voor alts
-    tpM: 4.7,    // V23: R:R=2.04
-    minQty: 0.1,
-    qtyStep: 0.1,
-    pricePrecision: 3,
-    color: '#2a5ada',
-    corrGroup: 'ALT2',
-    regimeATR: 0.09,
-  },
+  // V25 DISABLED — XRPUSDT/ADAUSDT/LINKUSD verloren elk in 90d backtest
+  // /* { id: 'XRPUSDT', krakenSymbol: 'XRP/USD', krakenPair: 'XRPUSD', vol:0.012, slM:2.6, tpM:4.8, corrGroup:'LOW' } */
+  // /* { id: 'ADAUSDT', krakenSymbol: 'ADA/USD', krakenPair: 'ADAUSD', vol:0.014, slM:2.6, tpM:4.8, corrGroup:'SPEC' } */
+  // /* { id: 'LINKUSD', krakenSymbol: 'LINK/USD', krakenPair: 'LINKUSD', vol:0.020, slM:2.3, tpM:4.2, corrGroup:'ALT2' } */
   {
     id: 'AVAXUSD',
     symbol: 'AVAXUSD',
@@ -223,7 +160,7 @@ export const ASSETS = [
     vol: 0.022,
     drift: 0.00045,
     slM: 2.3,    // V20: wijder SL voor alts
-    tpM: 4.7,    // V23: R:R=2.04
+    tpM: 4.2,    // V25: revert tpM (was 4.7)
     minQty: 0.01,
     qtyStep: 0.01,
     pricePrecision: 2,
@@ -240,7 +177,7 @@ export const ASSETS = [
     vol: 0.018,
     drift: 0.00035,
     slM: 2.3,    // V20: wijder SL voor alts
-    tpM: 4.7,    // V23: R:R=2.04
+    tpM: 4.2,    // V25: revert tpM (was 4.7)
     minQty: 10,
     qtyStep: 1,
     pricePrecision: 5,
@@ -253,15 +190,16 @@ export const ASSETS = [
   // ── Top 8 liquid assets (focus op kwaliteit bij klein kapitaal) ──
 ];
 
-// ── Correlation Groups (V18: 8 assets) ────────────────────────
-// BTC+ETH = HIGH correlation → max 1 tegelijk bij klein kapitaal
-// Met MAX_POS=3: je wilt spreiding, niet 2 van dezelfde groep
+// ── Correlation Groups (V25: 3 actieve assets) ────────────────
+// Active: SOLUSDT (MED), AVAXUSD (ALT3), DOGEUSD (ALT4)
+// Disabled groups (HIGH/LOW/SPEC/ALT2) blijven gedefinieerd zodat
+// reactivering van assets geen rules-breakage geeft.
 export const CORRELATION_RULES = {
-  HIGH:  { maxSimultaneous: 1 },  // V18: BTC OF ETH, niet beide (was 2 — te duur bij $197)
+  HIGH:  { maxSimultaneous: 1 },  // disabled (BTC/ETH)
   MED:   { maxSimultaneous: 1 },  // SOL
-  LOW:   { maxSimultaneous: 1 },  // XRP
-  SPEC:  { maxSimultaneous: 1 },  // ADA
-  ALT2:  { maxSimultaneous: 1 },  // LINK
+  LOW:   { maxSimultaneous: 1 },  // disabled (XRP)
+  SPEC:  { maxSimultaneous: 1 },  // disabled (ADA)
+  ALT2:  { maxSimultaneous: 1 },  // disabled (LINK)
   ALT3:  { maxSimultaneous: 1 },  // AVAX
   ALT4:  { maxSimultaneous: 1 },  // DOGE
 };
