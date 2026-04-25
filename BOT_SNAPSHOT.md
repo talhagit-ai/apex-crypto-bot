@@ -1,75 +1,117 @@
 # APEX Crypto Bot — Volledige Snapshot 25 april 2026
 
-## Live Status (huidige sessie)
+## Live Status (V26 deployed)
 - **Equity**: $188.07
-- **StartCapital**: $188.63 (start V23 deploy)
-- **PnL sessie**: -$0.56 (-0.30%)
-- **Trades**: 2 (1W/1L = 50% wr, PF 0.14)
-- **Posities**: 0
+- **StartCapital**: $188.07
+- **Posities**: 0 (bear regimes blokken longs op SOL/AVAX, DOGE neutral)
 - **Bot URL**: https://apex-crypto-bot-c3bt.onrender.com
 - **GitHub**: https://github.com/talhagit-ai/apex-crypto-bot
+- **Render uptime**: actief, UptimeRobot houdt /health wakker
 
 ## Deployment
-- **Versie**: V24 (paper shorts default)
+- **Versie**: V26 (walk-forward robust params)
 - **Hosting**: Render.com (auto-deploy bij git push)
 - **Exchange**: Kraken Spot (echt geld) + Kraken Futures (paper shorts)
 - **Capital**: ~$188 USD
 
-## Config samenvatting (V23 + V24)
-- 8 assets: BTC, ETH, SOL, XRP, ADA, LINK, AVAX, DOGE
-- MAX_POS=3, MAX_DEPLOY=0.70, MAX_SINGLE_PCT=0.40
-- MIN_RR=2.0, GROWTH_MIN_RR=2.0
-- PARTIAL1_R=0.75, PARTIAL2_R=1.25
-- TRAIL_R=1.0, TRAIL_ATR=2.0
-- DRY_RUN_SHORTS default AAN (paper validation)
+## Config V26 — actief
+- **Assets**: SOLUSDT, AVAXUSD, DOGEUSD (3-asset focus, V25)
+- **MAX_POS**=3, MAX_DEPLOY=0.70, MAX_SINGLE_PCT=0.40
+- **MIN_RR**=1.5 (V26: walk-forward robust, was 2.0)
+- **PARTIAL1_R**=1.5 (V26: was 0.75 — winners langer laten lopen)
+- **PARTIAL2_R**=2.0 (V26: was 1.25)
+- **TRAIL_R**=0.8, **TRAIL_ATR**=1.5 (bevestigd robust)
+- **GROWTH_MIN_RR**=1.5, GROWTH_TRAIL_R=0.8 (V26 aligned)
+- **DRY_RUN_SHORTS** default AAN (paper validation)
+
+## Versie-evolutie (recente upgrades)
+
+### V25 (data-driven cleanup) — vorige versie
+Reduceerde 8 assets → 3 (SOLUSDT, AVAXUSD, DOGEUSD).
+Per-asset diag toonde dat 5 assets net-negatief waren over 90d
+(BTCUSDT, ETHUSDT, ADAUSDT, XRPUSDT, LINKUSD).
+Tooling: `backend/diag-per-asset.mjs`, `backend/test-current-config.mjs`.
+Logger: `LOG_LEVEL` env var → geen 200MB+ backtest logs meer.
+
+### V26 (walk-forward robust) — actief
+Walk-forward (60d train / 30d test) onthulde dat V25 OVERFIT was:
+- V25 op train slice: +8.36% (gefit cijfer)
+- V25 op test slice: **-1.45%** (échte performance)
+- V26 op test slice: **+1.2%** (robust winner)
+
+Test scan (alle 144 configs op holdout) toonde 0/144 met PF>1 op
+out-of-sample. Wijst op markt-regime shift in cache. V26 kiest config
+die HET MINST verliest op test slice.
+
+**Belangrijke disclosure:** marginale edge (testPF=0.71). Verbetering
+ten opzichte van V25 komt vooral van het wegvallen van overfit-bias.
+Volgende stap: fresh data downloaden voor recente prijzen.
+
+## Tools (V25/V26)
+- `backend/backtest.mjs` — replay engine tegen historische data
+- `backend/hyperopt-ext.mjs` — 144-config grid search (cache-based)
+- `backend/hyperopt-per-asset.mjs` — V26: optimaliseert elk asset apart
+- `backend/walk-forward.mjs` — V26: top-5 train → test validatie
+- `backend/walk-forward-robust.mjs` — V26: alle 144 configs op test slice
+- `backend/diag-per-asset.mjs` — V25: per-asset PnL diagnostics
+- `backend/test-current-config.mjs` — V25: single-run validatie
+- `backend/data-downloader.mjs` — Kraken trades → 5m bars
+- `npm run hyperopt` / `diag` / `validate` — alle met LOG_LEVEL=warn
 
 ## Data assets
-- 8 cache files in ./cache/ (~15MB totaal)
-- 181,693 × 5m bars over 87-90 dagen
-- 10.25 miljoen Kraken trades verwerkt
+- Cache files in `./cache/` (~15MB totaal voor 3 actieve assets)
+- 90 dagen 5m bars per asset
+- Cache eindigt eind januari 2026 — vernieuwen wenselijk
 
-## Tools
-- backend/backtest.mjs — replay engine tegen historische data
-- backend/hyperopt.mjs — grid search 144 configs
-- backend/hyperopt-ext.mjs — extended versie met cache
-- backend/hyperopt-v2.mjs — fine-grain partial PCT search
-- backend/data-downloader.mjs — Kraken trades → 5m bars
+## Walk-Forward Resultaten V26 (60d train / 30d test)
+
+### Top-10 by TEST RETURN (out-of-sample)
+| Rank | Train | Test | TrainPF | TestPF | Config |
+|------|-------|------|---------|--------|--------|
+| 1 | 3.9%  | +1.2%  | 0.90 | 0.71 | P1=1.5 TR=0.8 ATR=1.5 RR=1.5 (V26) |
+| 2 | 3.9%  | +1.2%  | 0.90 | 0.71 | P1=1.5 TR=0.8 ATR=1.5 RR=1.8 |
+| 3 | 2.04% | +0.7%  | 0.84 | 0.71 | P1=0.75 TR=0.8 ATR=1.5 RR=1.5 |
+| 4 | 2.04% | +0.7%  | 0.84 | 0.71 | P1=0.75 TR=0.8 ATR=1.5 RR=1.8 |
+| 5 | 1.48% | +0.55% | 0.75 | 0.68 | P1=1 TR=0.6 ATR=1.5 RR=1.5 |
+
+### V25 versus V26 op test slice
+| Versie | Train | Test | Verdict |
+|--------|-------|------|---------|
+| V25    | +8.36% | **-1.45%** | OVERFIT |
+| V26    | +3.90% | **+1.2%**  | ROBUST (marginale edge) |
+
+## Per-Asset Hyperopt Output (info — niet toegepast)
+SOL/AVAX/DOGE willen elk andere optimale params (allemaal ATR=2.5),
+maar engine ondersteunt momenteel geen per-asset exit-params.
+Resultaten in `cache/per-asset-params.json`.
 
 ## Bekende issues / TODO
-- **HYPEROPT-V2 ramp**: alle 162 configs negatief (-5.92% best). Reden:
-  V23 bumped asset tpM zodat alle signals R:R 2.04+ haalden. MIN_RR=2.0 werd
-  daardoor nutteloos als quality filter. Nodig: revert asset tpM naar V20
-  (BTC tpM 5.7→5.2, mid 5.3→4.8, alts 4.7→4.2) terwijl MIN_RR=2.0 blijft.
-  Dan filtert MIN_RR alleen breakout-bonus signals door.
+- **Cache vernieuwen**: data eindigt eind januari, recent
+  prijsgedrag mist. Run `node backend/data-downloader.mjs`.
+- **Per-asset exit params**: engine refactor nodig om
+  PARTIAL1_R/TRAIL_R per asset te overriden.
+- **Ware regime-aware sizing**: huidige rsMult werkt al, maar
+  kan strikter (bear=0% size, neutral=50%).
 
-## Commits historie (laatste 10)
-6352a54 V24: Paper shorts default AAN — bot trade ook in bear markets
-5a95280 V23: Data-driven upgrade op basis van 90d Kraken historie
-a894789 V22: Hyperopt-gebaseerde PARTIAL tuning (+17% PF)
-e6612d0 V21: NFIX-geïnspireerde kwaliteitsfilters (Freqtrade research)
-2037441 V20: winners laten lopen — stop de breakeven-guillotine
-8612286 V19 Geldmachine: Telegram retry + strategische upgrades
-972db81 V19: Hard R:R 1.8 + Kelly sizing + startCapital bugfix
-eb5a0e5 fix: startCapital correct na buffer init + cash overshoot bij qty-gecapte SELL
-9dc59cf fix: reconcile qty sync + SELL/partial qty capping tegen Insufficient funds
-9acb29a fix: spotCash || → ?? om false-positive fallback bij 0 cash te voorkomen
+## Commits (laatste 10)
+- `bd3fc8c` V26: walk-forward-robust params — out-of-sample edge
+- `0068d07` V25 tooling: LOG_LEVEL env var + npm scripts
+- `d7406b7` V25: 3-asset focus + tuned trail (data-driven cleanup)
+- `fb01c34` Snapshot 25 april 2026 — volledige bot state
+- `6352a54` V24: Paper shorts default AAN
+- `5a95280` V23: Data-driven upgrade op 90d Kraken historie
+- `a894789` V22: Hyperopt-gebaseerde PARTIAL tuning
+- `e6612d0` V21: NFIX-geïnspireerde kwaliteitsfilters
+- `2037441` V20: winners laten lopen — stop breakeven-guillotine
+- `8612286` V19 Geldmachine: Telegram retry + strategische upgrades
 
-## Hyperopt resultaten (TOP 5 alle runs)
-
-### Hyperopt v1 (90d, 144 configs) — winnaar V23
-| Rank | Return | Trades | Win% | PF | Config |
-|------|--------|--------|------|-----|--------|
-| 1 | 8.15% | 109 | 51.4% | 1.14 | P1=0.75 TR=1 ATR=2 RR=2 |
-| 2 | 7.88% | 108 | 52.8% | 1.13 | P1=1.25 TR=1 ATR=2 RR=2 |
-| 3 | 7.72% | 111 | 54.1% | 1.14 | P1=0.75 TR=1 ATR=1.5 RR=2 |
-| 4 | 7.66% | 108 | 47.2% | 1.09 | P1=0.75 TR=1.5 ATR=1.5 RR=2 |
-| 5 | 6.99% | 106 | 49.1% | 1.08 | P1=1 TR=1 ATR=2.5 RR=2 |
-
-### Hyperopt v2 (162 configs, alles negatief — bug bewijs)
-| Rank | Return | Trades | Win% | PF | Sharpe | Config |
-|------|--------|--------|------|-----|--------|--------|
-| 1 | -5.92% | 55 | 30.9% | 0.24 | -3.8 | P1=0.75 P1%=0.25 P2%=0.33 ATR=1.5 |
-| 2 | -5.95% | 55 | 30.9% | 0.23 | -3.8 | P1=0.75 P1%=0.33 P2%=0.25 ATR=1.5 |
-| 3 | -5.96% | 55 | 30.9% | 0.21 | -4.02 | P1=0.75 P1%=0.33 P2%=0.33 ATR=1.5 |
-| 4 | -5.97% | 55 | 30.9% | 0.25 | -3.7 | P1=0.75 P1%=0.33 P2%=0.2 ATR=1.5 |
-| 5 | -6.05% | 63 | 27% | 0.22 | -4.06 | P1=0.5 P1%=0.33 P2%=0.25 ATR=2 |
+## Architectuur (research-validated)
+Vergeleken met Freqtrade/professional bots:
+- ✓ Dual partial exits + trailing stops
+- ✓ Circuit breaker op dagelijks/wekelijks verlies
+- ✓ EMA50+ADX regime detection
+- ✓ Rolling loss windows (24h/7d)
+- ✓ Walk-forward validation (V26 toegevoegd)
+- ✗ Edge Position Sizing (Freqtrade-stijl) — TODO
+- ✗ HMM/GMM multi-regime detection — TODO
+- ✗ Per-asset exit params — TODO

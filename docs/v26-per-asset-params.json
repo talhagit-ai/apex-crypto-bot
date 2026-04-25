@@ -1,0 +1,244 @@
+{
+  "timestamp": 1777149246551,
+  "finalParams": {
+    "SOLUSDT": {
+      "PARTIAL1_R": 1.25,
+      "PARTIAL2_R": 1.75,
+      "TRAIL_R": 0.8,
+      "TRAIL_ATR": 2.5,
+      "MIN_RR": 1.5
+    },
+    "AVAXUSD": {
+      "PARTIAL1_R": 0.75,
+      "PARTIAL2_R": 1.25,
+      "TRAIL_R": 1,
+      "TRAIL_ATR": 2.5,
+      "MIN_RR": 1.5
+    },
+    "DOGEUSD": {
+      "PARTIAL1_R": 1.5,
+      "PARTIAL2_R": 2,
+      "TRAIL_R": 0.8,
+      "TRAIL_ATR": 2.5,
+      "MIN_RR": 2
+    }
+  },
+  "top5PerAsset": {
+    "SOLUSDT": [
+      {
+        "params": {
+          "PARTIAL1_R": 1.25,
+          "PARTIAL2_R": 1.75,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.5
+        },
+        "ret": 7.83,
+        "trades": 72,
+        "wr": 51.4,
+        "pf": 1,
+        "maxDD": 1.76
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1.25,
+          "PARTIAL2_R": 1.75,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.8
+        },
+        "ret": 7.83,
+        "trades": 72,
+        "wr": 51.4,
+        "pf": 1,
+        "maxDD": 1.76
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1,
+          "PARTIAL2_R": 1.5,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.5
+        },
+        "ret": 7.71,
+        "trades": 73,
+        "wr": 52.1,
+        "pf": 1.09,
+        "maxDD": 1.75
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1,
+          "PARTIAL2_R": 1.5,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.8
+        },
+        "ret": 7.71,
+        "trades": 73,
+        "wr": 52.1,
+        "pf": 1.09,
+        "maxDD": 1.75
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1.25,
+          "PARTIAL2_R": 1.75,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2,
+          "MIN_RR": 1.5
+        },
+        "ret": 7.59,
+        "trades": 75,
+        "wr": 52,
+        "pf": 1.01,
+        "maxDD": 1.67
+      }
+    ],
+    "AVAXUSD": [
+      {
+        "params": {
+          "PARTIAL1_R": 0.75,
+          "PARTIAL2_R": 1.25,
+          "TRAIL_R": 1,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.5
+        },
+        "ret": 2.5,
+        "trades": 59,
+        "wr": 39,
+        "pf": 0.72,
+        "maxDD": 1.81
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 0.75,
+          "PARTIAL2_R": 1.25,
+          "TRAIL_R": 1,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.8
+        },
+        "ret": 2.5,
+        "trades": 59,
+        "wr": 39,
+        "pf": 0.72,
+        "maxDD": 1.81
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 0.75,
+          "PARTIAL2_R": 1.25,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.5
+        },
+        "ret": 2.27,
+        "trades": 61,
+        "wr": 37.7,
+        "pf": 0.71,
+        "maxDD": 1.81
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 0.75,
+          "PARTIAL2_R": 1.25,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 1.8
+        },
+        "ret": 2.27,
+        "trades": 61,
+        "wr": 37.7,
+        "pf": 0.71,
+        "maxDD": 1.81
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1,
+          "PARTIAL2_R": 1.5,
+          "TRAIL_R": 0.6,
+          "TRAIL_ATR": 1.5,
+          "MIN_RR": 2
+        },
+        "ret": 2.27,
+        "trades": 54,
+        "wr": 44.4,
+        "pf": 0.79,
+        "maxDD": 1.95
+      }
+    ],
+    "DOGEUSD": [
+      {
+        "params": {
+          "PARTIAL1_R": 1.5,
+          "PARTIAL2_R": 2,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 2
+        },
+        "ret": 7.29,
+        "trades": 43,
+        "wr": 51.2,
+        "pf": 1.14,
+        "maxDD": 2.36
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1.25,
+          "PARTIAL2_R": 1.75,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 2
+        },
+        "ret": 7.01,
+        "trades": 43,
+        "wr": 51.2,
+        "pf": 1.24,
+        "maxDD": 2.36
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1.5,
+          "PARTIAL2_R": 2,
+          "TRAIL_R": 1,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 2
+        },
+        "ret": 6.59,
+        "trades": 43,
+        "wr": 48.8,
+        "pf": 1.06,
+        "maxDD": 2.81
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1.25,
+          "PARTIAL2_R": 1.75,
+          "TRAIL_R": 1,
+          "TRAIL_ATR": 2.5,
+          "MIN_RR": 2
+        },
+        "ret": 6.48,
+        "trades": 43,
+        "wr": 48.8,
+        "pf": 1.16,
+        "maxDD": 2.81
+      },
+      {
+        "params": {
+          "PARTIAL1_R": 1.25,
+          "PARTIAL2_R": 1.75,
+          "TRAIL_R": 0.8,
+          "TRAIL_ATR": 1.5,
+          "MIN_RR": 2
+        },
+        "ret": 6.23,
+        "trades": 47,
+        "wr": 51.1,
+        "pf": 1.18,
+        "maxDD": 2.04
+      }
+    ]
+  }
+}

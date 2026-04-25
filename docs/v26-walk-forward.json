@@ -1,0 +1,249 @@
+{
+  "timestamp": 1777149520528,
+  "splitRatio": 0.6666666666666666,
+  "trainTop10": [
+    {
+      "params": {
+        "PARTIAL1_R": 0.75,
+        "PARTIAL2_R": 1.25,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 10.33,
+      "trades": 88,
+      "wr": 60.2,
+      "pf": 1.32
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 1,
+        "PARTIAL2_R": 1.5,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 10.14,
+      "trades": 89,
+      "wr": 59.6,
+      "pf": 1.21
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 1.25,
+        "PARTIAL2_R": 1.75,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 9.96,
+      "trades": 89,
+      "wr": 59.6,
+      "pf": 1.22
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 1.5,
+        "PARTIAL2_R": 2,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 9.73,
+      "trades": 89,
+      "wr": 58.4,
+      "pf": 1.17
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 1,
+        "PARTIAL2_R": 1.5,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 2.5,
+        "MIN_RR": 2
+      },
+      "ret": 9.16,
+      "trades": 83,
+      "wr": 50.6,
+      "pf": 1.12
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 0.75,
+        "PARTIAL2_R": 1.25,
+        "TRAIL_R": 1,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 9.13,
+      "trades": 86,
+      "wr": 59.3,
+      "pf": 1.23
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 0.75,
+        "PARTIAL2_R": 1.25,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 2,
+        "MIN_RR": 2
+      },
+      "ret": 8.98,
+      "trades": 84,
+      "wr": 53.6,
+      "pf": 1.24
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 1,
+        "PARTIAL2_R": 1.5,
+        "TRAIL_R": 0.6,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 8.86,
+      "trades": 91,
+      "wr": 56,
+      "pf": 1.17
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 0.75,
+        "PARTIAL2_R": 1.25,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 2.5,
+        "MIN_RR": 2
+      },
+      "ret": 8.83,
+      "trades": 81,
+      "wr": 49.4,
+      "pf": 1.2
+    },
+    {
+      "params": {
+        "PARTIAL1_R": 1.25,
+        "PARTIAL2_R": 1.75,
+        "TRAIL_R": 1,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "ret": 8.71,
+      "trades": 86,
+      "wr": 58.1,
+      "pf": 1.14
+    }
+  ],
+  "validation": [
+    {
+      "rank": 1,
+      "params": {
+        "PARTIAL1_R": 0.75,
+        "PARTIAL2_R": 1.25,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "train": {
+        "ret": 10.33,
+        "trades": 88,
+        "wr": 60.2,
+        "pf": 1.32
+      },
+      "test": {
+        "ret": -1.9,
+        "trades": 70,
+        "wr": 34.3,
+        "pf": 0.53
+      }
+    },
+    {
+      "rank": 2,
+      "params": {
+        "PARTIAL1_R": 1,
+        "PARTIAL2_R": 1.5,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "train": {
+        "ret": 10.14,
+        "trades": 89,
+        "wr": 59.6,
+        "pf": 1.21
+      },
+      "test": {
+        "ret": -1.8,
+        "trades": 70,
+        "wr": 34.3,
+        "pf": 0.53
+      }
+    },
+    {
+      "rank": 3,
+      "params": {
+        "PARTIAL1_R": 1.25,
+        "PARTIAL2_R": 1.75,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "train": {
+        "ret": 9.96,
+        "trades": 89,
+        "wr": 59.6,
+        "pf": 1.22
+      },
+      "test": {
+        "ret": -1.94,
+        "trades": 70,
+        "wr": 34.3,
+        "pf": 0.52
+      }
+    },
+    {
+      "rank": 4,
+      "params": {
+        "PARTIAL1_R": 1.5,
+        "PARTIAL2_R": 2,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 1.5,
+        "MIN_RR": 2
+      },
+      "train": {
+        "ret": 9.73,
+        "trades": 89,
+        "wr": 58.4,
+        "pf": 1.17
+      },
+      "test": {
+        "ret": -1.43,
+        "trades": 70,
+        "wr": 34.3,
+        "pf": 0.55
+      }
+    },
+    {
+      "rank": 5,
+      "params": {
+        "PARTIAL1_R": 1,
+        "PARTIAL2_R": 1.5,
+        "TRAIL_R": 0.8,
+        "TRAIL_ATR": 2.5,
+        "MIN_RR": 2
+      },
+      "train": {
+        "ret": 9.16,
+        "trades": 83,
+        "wr": 50.6,
+        "pf": 1.12
+      },
+      "test": {
+        "ret": -1.93,
+        "trades": 67,
+        "wr": 34.3,
+        "pf": 0.52
+      }
+    }
+  ],
+  "robustWinner": null
+}
