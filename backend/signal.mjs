@@ -3,7 +3,7 @@
 //  Long + Short signals, 6-factor confirmation, multi-TF regime
 // ═══════════════════════════════════════════════════════════════
 
-import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence, detectBreakout } from './indicators.mjs';
+import { ema, rsi, calcATR, calcADX, macdH, vwap, volumeRatio, atrPercentile, volatilityRegime, detectDivergence, detectBreakout, heikinAshi, haColorStreak, bollingerBands, keltnerChannels, bbKcSqueeze, ichimoku, mtfAlignment } from './indicators.mjs';
 import { ADX_MIN, SLOPE_BARS, MIN_CONF, MIN_RR, VWAP_WINDOW, FACTOR_WEIGHTS, FACTOR_WEIGHT_MAX, VR_THRESHOLD, FEE_RATE } from './config.mjs';
 
 // ── Regime Filters ─────────────────────────────────────────────
@@ -181,6 +181,32 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
     qualityScore += 0.8 * breakout.strength; // up to +0.8
   }
 
+  // V30 LONG: Heikin-Ashi color streak (smoothed trend confirmation)
+  const opensSeed = opts._opens || closes; // engine doesn't always pass opens; fall back
+  const ha = heikinAshi(opensSeed, highs, lows, closes);
+  const streak = haColorStreak(ha.haOpen, ha.haClose);
+  if (streak >= 5)      qualityScore += 0.8;
+  else if (streak >= 3) qualityScore += 0.5;
+  else if (streak <= -3) qualityScore -= 0.5;
+
+  // V30 LONG: BB-KC Squeeze release (breakout proxy)
+  const sq = bbKcSqueeze(closes, highs, lows);
+  if (sq.bb && cur > sq.bb.upper) qualityScore += 0.7;       // breaking out top BB
+  else if (sq.squeeze)            qualityScore += 0.3;       // in squeeze, anticipate
+
+  // V30 LONG: Ichimoku 1h cloud (use regimeData if 1h available)
+  if (regimeData && regimeData.closes.length >= 80) {
+    const ich = ichimoku(regimeData.highs, regimeData.lows, regimeData.closes);
+    if (ich.priceAboveCloud && ich.cloudBull) qualityScore += 0.6;
+    else if (ich.priceBelowCloud)             qualityScore -= 0.4;
+  }
+
+  // V30 LONG: Multi-timeframe alignment (5m + 15m + 1h)
+  if (tf15Data && regimeData) {
+    const mtf = mtfAlignment(closes, tf15Data.closes, regimeData.closes);
+    qualityScore += mtf * 0.35; // -1.05 to +1.05
+  }
+
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6); // normalized 0-6
 
   // Growth mode: dynamic MIN_CONF (V11: floor op 4, niet 3)
@@ -355,6 +381,32 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   const breakout = detectBreakout(closes, highs, lows);
   if (breakout.breakout && breakout.direction === 'bear') {
     qualityScore += 0.8 * breakout.strength;
+  }
+
+  // V30 SHORT: Heikin-Ashi color streak (red streak = bearish momentum)
+  const opensSeed = opts._opens || closes;
+  const ha = heikinAshi(opensSeed, highs, lows, closes);
+  const streak = haColorStreak(ha.haOpen, ha.haClose);
+  if (streak <= -5)     qualityScore += 0.8;
+  else if (streak <= -3) qualityScore += 0.5;
+  else if (streak >= 3)  qualityScore -= 0.5;
+
+  // V30 SHORT: BB-KC Squeeze release (breakdown)
+  const sq = bbKcSqueeze(closes, highs, lows);
+  if (sq.bb && cur < sq.bb.lower) qualityScore += 0.7;
+  else if (sq.squeeze)            qualityScore += 0.3;
+
+  // V30 SHORT: Ichimoku 1h cloud (price below + bear cloud = strong short)
+  if (regimeData && regimeData.closes.length >= 80) {
+    const ich = ichimoku(regimeData.highs, regimeData.lows, regimeData.closes);
+    if (ich.priceBelowCloud && !ich.cloudBull) qualityScore += 0.6;
+    else if (ich.priceAboveCloud)              qualityScore -= 0.4;
+  }
+
+  // V30 SHORT: Multi-timeframe alignment (negative score = bear stack)
+  if (tf15Data && regimeData) {
+    const mtf = mtfAlignment(closes, tf15Data.closes, regimeData.closes);
+    qualityScore += -mtf * 0.35; // bear: invert score
   }
 
   const conf = Math.round(qualityScore / FACTOR_WEIGHT_MAX * 6);

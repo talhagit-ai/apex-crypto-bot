@@ -298,3 +298,196 @@ export function detectBreakout(closes, highs, lows, lookback = 20) {
   if (bearBreak) return { breakout: true, direction: 'bear', strength };
   return { breakout: false, direction: null, strength: 0 };
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  V30 — Extended indicator pack
+//  Heikin-Ashi, Bollinger, Keltner, Squeeze, Ichimoku, MTF, SMA
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Simple Moving Average
+ */
+export function sma(arr, n) {
+  const out = new Float64Array(arr.length);
+  if (arr.length < n) return out;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += arr[i];
+  out[n - 1] = sum / n;
+  for (let i = n; i < arr.length; i++) {
+    sum += arr[i] - arr[i - n];
+    out[i] = sum / n;
+  }
+  return out;
+}
+
+/**
+ * Standard deviation rolling — used by Bollinger
+ */
+export function stddev(arr, n) {
+  const out = new Float64Array(arr.length);
+  if (arr.length < n) return out;
+  const m = sma(arr, n);
+  for (let i = n - 1; i < arr.length; i++) {
+    let s = 0;
+    for (let j = i - n + 1; j <= i; j++) {
+      const d = arr[j] - m[i];
+      s += d * d;
+    }
+    out[i] = Math.sqrt(s / n);
+  }
+  return out;
+}
+
+/**
+ * Heikin-Ashi candles — smoothed OHLC for noise reduction.
+ * Returns parallel arrays haOpen/haHigh/haLow/haClose.
+ * Use the LAST element via array[length-1] for current bar.
+ */
+export function heikinAshi(opens, highs, lows, closes) {
+  const n = closes.length;
+  const haOpen = new Float64Array(n), haHigh = new Float64Array(n);
+  const haLow  = new Float64Array(n), haClose = new Float64Array(n);
+  if (n === 0) return { haOpen, haHigh, haLow, haClose };
+  haOpen[0]  = (opens[0] + closes[0]) / 2;
+  haClose[0] = (opens[0] + highs[0] + lows[0] + closes[0]) / 4;
+  haHigh[0]  = Math.max(highs[0], haOpen[0], haClose[0]);
+  haLow[0]   = Math.min(lows[0],  haOpen[0], haClose[0]);
+  for (let i = 1; i < n; i++) {
+    haClose[i] = (opens[i] + highs[i] + lows[i] + closes[i]) / 4;
+    haOpen[i]  = (haOpen[i - 1] + haClose[i - 1]) / 2;
+    haHigh[i]  = Math.max(highs[i], haOpen[i], haClose[i]);
+    haLow[i]   = Math.min(lows[i],  haOpen[i], haClose[i]);
+  }
+  return { haOpen, haHigh, haLow, haClose };
+}
+
+/**
+ * Heikin-Ashi color streak length.
+ * Returns positive integer for green streak, negative for red, 0 if just flipped.
+ */
+export function haColorStreak(haOpen, haClose) {
+  const n = haClose.length;
+  if (n < 2) return 0;
+  const cur = haClose[n - 1] > haOpen[n - 1] ? 1 : haClose[n - 1] < haOpen[n - 1] ? -1 : 0;
+  if (cur === 0) return 0;
+  let streak = cur;
+  for (let i = n - 2; i >= 0 && i >= n - 20; i--) {
+    const c = haClose[i] > haOpen[i] ? 1 : haClose[i] < haOpen[i] ? -1 : 0;
+    if (c === cur) streak += cur;
+    else break;
+  }
+  return streak;
+}
+
+/**
+ * Bollinger Bands — middle SMA ± stdDev × stdMult
+ * Returns { upper, middle, lower, width } at last index.
+ */
+export function bollingerBands(closes, period = 20, stdMult = 2) {
+  const n = closes.length;
+  if (n < period) return { upper: NaN, middle: NaN, lower: NaN, width: NaN };
+  const m  = sma(closes, period);
+  const sd = stddev(closes, period);
+  const i = n - 1;
+  const upper  = m[i] + sd[i] * stdMult;
+  const lower  = m[i] - sd[i] * stdMult;
+  return { upper, middle: m[i], lower, width: upper - lower };
+}
+
+/**
+ * Keltner Channels — EMA ± ATR × atrMult
+ * Returns { upper, middle, lower } at last index.
+ */
+export function keltnerChannels(highs, lows, closes, period = 20, atrMult = 1.5) {
+  const n = closes.length;
+  if (n < period + 1) return { upper: NaN, middle: NaN, lower: NaN };
+  const e = ema(closes, period);
+  const a = calcATR(highs, lows, closes, period);
+  const i = n - 1;
+  return { upper: e[i] + a * atrMult, middle: e[i], lower: e[i] - a * atrMult };
+}
+
+/**
+ * BB-KC Squeeze: true wanneer Bollinger Bands volledig binnen Keltner Channels.
+ * Indicates low-volatility consolidation → impending breakout.
+ */
+export function bbKcSqueeze(closes, highs, lows, period = 20, bbMult = 2, kcMult = 1.5) {
+  const bb = bollingerBands(closes, period, bbMult);
+  const kc = keltnerChannels(highs, lows, closes, period, kcMult);
+  if (isNaN(bb.upper) || isNaN(kc.upper)) return { squeeze: false, intensity: 0 };
+  const squeeze = bb.upper < kc.upper && bb.lower > kc.lower;
+  // Intensity: how tight (ratio) — lower = tighter squeeze
+  const intensity = squeeze ? 1 - (bb.width / (kc.upper - kc.lower || 1)) : 0;
+  return { squeeze, intensity, bb, kc };
+}
+
+/**
+ * Ichimoku Cloud — Tenkan, Kijun, Senkou Span A/B, Chikou
+ * Returns latest values + cloud color (bull = senkouA > senkouB).
+ * Note: senkou values are projected 26 bars forward; we return current cloud
+ * which is values from 26 bars ago.
+ */
+export function ichimoku(highs, lows, closes, tp = 9, kp = 26, sb = 52) {
+  const n = closes.length;
+  const minBars = sb + kp;
+  if (n < minBars) {
+    return { tenkan: NaN, kijun: NaN, senkouA: NaN, senkouB: NaN, chikou: NaN, cloudBull: false, priceAboveCloud: false };
+  }
+  const hh = (period, end) => {
+    let h = -Infinity;
+    for (let i = end - period + 1; i <= end; i++) if (highs[i] > h) h = highs[i];
+    return h;
+  };
+  const ll = (period, end) => {
+    let l = Infinity;
+    for (let i = end - period + 1; i <= end; i++) if (lows[i] < l) l = lows[i];
+    return l;
+  };
+  const tenkan = (hh(tp, n - 1) + ll(tp, n - 1)) / 2;
+  const kijun  = (hh(kp, n - 1) + ll(kp, n - 1)) / 2;
+  // Cloud-now reflects projection from 26 bars ago
+  const refIdx = n - 1 - kp;
+  const senkouA = ((hh(tp, refIdx) + ll(tp, refIdx)) / 2 + (hh(kp, refIdx) + ll(kp, refIdx)) / 2) / 2;
+  const senkouB = (hh(sb, refIdx) + ll(sb, refIdx)) / 2;
+  const chikou  = closes[n - 1 - kp];
+  const price   = closes[n - 1];
+  const cloudBull = senkouA > senkouB;
+  const priceAboveCloud = price > Math.max(senkouA, senkouB);
+  const priceBelowCloud = price < Math.min(senkouA, senkouB);
+  return { tenkan, kijun, senkouA, senkouB, chikou, cloudBull, priceAboveCloud, priceBelowCloud };
+}
+
+/**
+ * Multi-timeframe alignment score — checks of trend in 5m / 15m / 1h dezelfde kant op staat.
+ * Returns score in [-3, +3]: +3 = volledig bullish stack, -3 = volledig bearish.
+ * Each TF: +1 if EMA8 > EMA21 > EMA50, -1 if EMA8 < EMA21 < EMA50, 0 else.
+ */
+export function mtfAlignment(closes5m, closes15m, closes60m) {
+  const score = (closes) => {
+    if (!closes || closes.length < 50) return 0;
+    const e8  = ema(closes, 8);
+    const e21 = ema(closes, 21);
+    const e50 = ema(closes, 50);
+    const i = closes.length - 1;
+    if (e8[i] > e21[i] && e21[i] > e50[i]) return 1;
+    if (e8[i] < e21[i] && e21[i] < e50[i]) return -1;
+    return 0;
+  };
+  return score(closes5m) + score(closes15m) + score(closes60m);
+}
+
+/**
+ * Order book imbalance score from top-N levels.
+ * Input: bids = [[price, size], ...], asks = [[price, size], ...] (sorted)
+ * Returns ratio in (-1, +1): +1 = all bids, -1 = all asks, 0 = balanced.
+ * Multiply by 2 for full -2..+2 factor scale.
+ */
+export function orderBookImbalance(bids, asks, depth = 5) {
+  if (!bids?.length || !asks?.length) return 0;
+  let bidVol = 0, askVol = 0;
+  for (let i = 0; i < Math.min(depth, bids.length); i++) bidVol += parseFloat(bids[i][1] || 0);
+  for (let i = 0; i < Math.min(depth, asks.length); i++) askVol += parseFloat(asks[i][1] || 0);
+  const total = bidVol + askVol;
+  if (total === 0) return 0;
+  return (bidVol - askVol) / total;
+}
