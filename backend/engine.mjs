@@ -48,7 +48,18 @@ export class TradingEngine {
     this.MRR    = p.MIN_RR       ?? (opts.growthMode ? GROWTH_MIN_RR   : MIN_RR);
     // Per-asset slM/tpM overrides: { BTCUSDT: { slM, tpM }, ... }
     this.assetOverrides = p.assets || {};
+    // V34: per-asset exit param overrides (PARTIAL1_R/P2_R/TRAIL_R/TRAIL_ATR/MIN_RR/MAX_BARS).
+    // p.perAsset = { SOLUSDT: { PARTIAL1_R: 1.25, ... }, ... }
+    this.perAssetParams = p.perAsset || {};
   }
+
+  // V34 helpers: get per-asset exit param with fallback to global engine setting.
+  _p1R(id)   { return this.perAssetParams[id]?.PARTIAL1_R ?? this.P1_R; }
+  _p2R(id)   { return this.perAssetParams[id]?.PARTIAL2_R ?? this.P2_R; }
+  _trR(id)   { return this.perAssetParams[id]?.TRAIL_R    ?? this.T_R; }
+  _trATR(id) { return this.perAssetParams[id]?.TRAIL_ATR  ?? this.T_ATR; }
+  _mRR(id)   { return this.perAssetParams[id]?.MIN_RR     ?? this.MRR; }
+  _mBars(id) { return this.perAssetParams[id]?.MAX_BARS   ?? this.MBARS; }
 
   /**
    * Simplified tick for optimizer simulation — no regime data (uses 5m as fallback)
@@ -125,7 +136,8 @@ export class TradingEngine {
         : (cur - pos.entry) * pos.qty / Math.max(pos.risk, 1e-9);
 
       // ── Partial Profit #1 @ 0.5R ────────────────────────────
-      if (!pos.partial1Taken && pnlR >= this.P1_R) {
+      const p1R = this._p1R(id);
+      if (!pos.partial1Taken && pnlR >= p1R) {
         const pqty = this._roundQty(id, pos.qty * this.P1_PCT);
         if (pqty > 0) {
           const pnl = isShort
@@ -143,7 +155,7 @@ export class TradingEngine {
           pos.qty -= pqty;
           pos.risk = pos.qty * Math.abs(pos.entry - pos.sl); // Update risk after partial
           pos.partial1Taken = true;
-          this._logTrade(id, 'PARTIAL1', cur, pqty, pnl, this.P1_R, `Partial @ ${this.P1_R}R`);
+          this._logTrade(id, 'PARTIAL1', cur, pqty, pnl, p1R, `Partial @ ${p1R}R`);
           // V20: GEEN breakeven SL meer bij partial1 — geeft trade volledige ruimte
           // om TP te bereiken ipv premature SL-exit op 5m ruis
         }
@@ -173,7 +185,8 @@ export class TradingEngine {
       }
 
       // ── Partial Profit #2 @ 1.0R ────────────────────────────
-      if (pos.partial1Taken && !pos.partial2Taken && pnlR >= this.P2_R) {
+      const p2R = this._p2R(id);
+      if (pos.partial1Taken && !pos.partial2Taken && pnlR >= p2R) {
         const pqty = this._roundQty(id, pos.qty * this.P2_PCT);
         if (pqty > 0) {
           const pnl = isShort
@@ -191,7 +204,7 @@ export class TradingEngine {
           pos.qty -= pqty;
           pos.risk = pos.qty * Math.abs(pos.entry - pos.sl); // Update risk after partial
           pos.partial2Taken = true;
-          this._logTrade(id, 'PARTIAL2', cur, pqty, pnl, this.P2_R, `Partial @ ${this.P2_R}R`);
+          this._logTrade(id, 'PARTIAL2', cur, pqty, pnl, p2R, `Partial @ ${p2R}R`);
 
           // V20: Breakeven SL pas NA partial2 (+1.5R) — niet na partial1
           // Runner is dan ~50% risk-free want +1.0R al binnen
@@ -206,12 +219,15 @@ export class TradingEngine {
       const allowTrail = pos.age >= 3;
 
       // ── Trailing Stop (V20/V21: pas vanaf +1R, geen tightening tot +3R, niet in eerste 3 bars) ──
-      if (allowTrail && pnlR >= this.T_R) {
+      const tR    = this._trR(id);
+      const tATR  = this._trATR(id);
+      const mBars = this._mBars(id);
+      if (allowTrail && pnlR >= tR) {
         const regime = this.regimes[id];
         const vReg   = pos.volRegime || 'trending';
-        const isStrongTrend = regime === 'bull' && pos.age < this.MBARS * 0.5;
+        const isStrongTrend = regime === 'bull' && pos.age < mBars * 0.5;
         // Wijde basis: geef winner ademruimte — liever full TP dan vroeg SL
-        let trailMult = isStrongTrend ? this.T_ATR : this.T_ATR * 0.9;
+        let trailMult = isStrongTrend ? tATR : tATR * 0.9;
         // V20: pas na +3R locken (echte home-runs) — daarvoor geen choking
         if (pnlR >= 3.0) trailMult *= 0.70;
         // Volatility regime adjustment
@@ -238,7 +254,7 @@ export class TradingEngine {
         if (cur <= pos.sl)       exitReason = 'SL';
         else if (cur >= pos.tp)  exitReason = 'TP';
       }
-      if (pos.age >= this.MBARS) exitReason = exitReason || 'TIME';
+      if (pos.age >= this._mBars(id)) exitReason = exitReason || 'TIME';
 
       if (exitReason && pos.qty > 0) {
         this._closePosition(id, cur, exitReason);
@@ -283,7 +299,7 @@ export class TradingEngine {
         }
 
         const rd = regimeData?.[asset.id] || b;
-        const sigOpts = { MIN_CONF: this.MCONF, MIN_RR: this.MRR, growthMode: this.opts.growthMode };
+        const sigOpts = { MIN_CONF: this.MCONF, MIN_RR: this._mRR(asset.id), growthMode: this.opts.growthMode };
         const assetCfg = this.assetOverrides[asset.id]
           ? { ...asset, ...this.assetOverrides[asset.id] }
           : asset;

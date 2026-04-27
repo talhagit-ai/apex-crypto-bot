@@ -9,6 +9,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync } from 'fs';
 import {
   ASSETS, CAPITAL, SERVER_PORT,
   CANDLE_INTERVAL, TF15_INTERVAL, REGIME_INTERVAL, ENABLE_SHORTS, DRY_RUN_SHORTS,
@@ -33,9 +34,32 @@ const futures = new KrakenFuturesClient();
 const buffer  = new CandleBuffer(kraken);
 const orders  = new OrderManager(kraken);
 
+// V34: load per-asset exit param overrides from cache/per-asset-params.json (sync at boot).
+// Skip if stale (>14d old) — gegenereerd door hyperopt-per-asset op verouderde cache
+// kan averechts werken in nieuw regime. Re-run hyperopt-per-asset op verse data
+// om dit te activeren.
+function loadPerAssetParamsSync() {
+  try {
+    const raw = readFileSync('./cache/per-asset-params.json', 'utf8');
+    const parsed = JSON.parse(raw);
+    const ageMs = Date.now() - (parsed.timestamp || 0);
+    // V34: strenge 3d threshold — hyperopt op oudere cache kan averechts werken
+    // bij regime-shift. Disable per-asset overrides als params >3d oud zijn.
+    const STALE_MS = 3 * 24 * 60 * 60 * 1000;
+    if (ageMs > STALE_MS) {
+      log.warn(`per-asset-params.json is ${Math.round(ageMs / 86400000)}d oud — skip (run hyperopt-per-asset om te verversen)`);
+      return {};
+    }
+    return parsed.finalParams || {};
+  } catch (_) { return {}; }
+}
+
 // Engine + DB initialized async in start()
 const learningEngine = new LearningEngine();
-let engine = new TradingEngine(CAPITAL, { overrideParams: loadParamsSync(), enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine });
+let engine = new TradingEngine(CAPITAL, {
+  overrideParams: { ...loadParamsSync(), perAsset: loadPerAssetParamsSync() },
+  enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine,
+});
 
 let wsClients = new Set();
 let tickCount  = 0;
@@ -575,7 +599,7 @@ app.post('/optimize', async (_req, res) => {
     const newParams = await loadParams();
     if (newParams._meta) {
       engine = new TradingEngine(engine.capital, {
-        overrideParams: newParams,
+        overrideParams: { ...newParams, perAsset: loadPerAssetParamsSync() },
         enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS,
         growthMode: GROWTH_MODE,
         learningEngine,
@@ -1234,7 +1258,7 @@ async function start() {
     await saveState('params', null);
     // Engine gebruikt nu nieuwe DEFAULT_PARAMS uit optimizer.mjs (met _v17 flag)
   } else if (savedParams && savedParams._v17) {
-    engine = new TradingEngine(CAPITAL, { overrideParams: savedParams, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine });
+    engine = new TradingEngine(CAPITAL, { overrideParams: { ...savedParams, perAsset: loadPerAssetParamsSync() }, enableShorts: ENABLE_SHORTS || DRY_RUN_SHORTS, growthMode: GROWTH_MODE, learningEngine });
     log.info('Loaded V17 optimizer params from DB', savedParams._meta);
   }
 

@@ -74,9 +74,23 @@ for (const id of ids) {
   bars60Map[id] = aggregate(bars5Map[id], 60);
 }
 
+// V34: load per-asset overrides from cache for backtest (skip if stale >14d)
+let perAsset = {};
+try {
+  const raw = await fs.readFile('./cache/per-asset-params.json', 'utf8');
+  const parsed = JSON.parse(raw);
+  const ageMs = Date.now() - (parsed.timestamp || 0);
+  if (ageMs <= 3 * 24 * 60 * 60 * 1000) {
+    perAsset = parsed.finalParams || {};
+    console.error(`Loaded per-asset params (${Math.round(ageMs/86400000)}d oud): ${Object.keys(perAsset).join(', ') || '(geen)'}`);
+  } else {
+    console.error(`per-asset-params.json is ${Math.round(ageMs/86400000)}d oud — skip`);
+  }
+} catch (_) {}
+
 const engine = new TradingEngine(START, {
   growthMode: true, simMode: true,
-  overrideParams: { PARTIAL1_R, PARTIAL2_R, TRAIL_R, TRAIL_ATR, MIN_RR },
+  overrideParams: { PARTIAL1_R, PARTIAL2_R, TRAIL_R, TRAIL_ATR, MIN_RR, perAsset },
 });
 
 const longest = Object.values(bars5Map).reduce((a, b) => b.length > a.length ? b : a, []);
