@@ -10,12 +10,16 @@ services:
       - key: CAPITAL
         value: 100
       - key: ENABLE_SHORTS
-        value: false
-      - key: DRY_RUN_SHORTS
         value: true
+      - key: DRY_RUN_SHORTS
+        value: false
       - key: GROWTH_MODE
         value: true
       - key: KRAKEN_API_KEY
         sync: false
       - key: KRAKEN_API_SECRET
+        sync: false
+      - key: KRAKEN_FUTURES_API_KEY
+        sync: false
+      - key: KRAKEN_FUTURES_API_SECRET
         sync: false
