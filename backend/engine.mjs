@@ -11,7 +11,7 @@ import {
   GROWTH_TRAIL_R, GROWTH_MAX_BARS, GROWTH_MIN_RR,
 } from './config.mjs';
 import { calcATR } from './indicators.mjs';
-import { checkRegime, checkBearishRegime, generateSignal, generateShortSignal } from './signal.mjs';
+import { checkRegime, checkBearishRegime, generateSignal, generateShortSignal, generateMeanReversionSignal } from './signal.mjs';
 import { createRiskState, checkPeriodReset, canOpenPosition, calculatePositionSize, recordTradeResult } from './risk.mjs';
 import { log } from './logger.mjs';
 import { saveTradeAnalytics } from './persistence.mjs';
@@ -367,6 +367,21 @@ export class TradingEngine {
               }
               sig.btcChange1h = btcChange1h;
               candidates.push({ asset: assetCfg, sig });
+            }
+          }
+        }
+
+        // V39: Mean-reversion scalper — alleen als regime state='range'
+        // En geen bullRegime/bearRegime al actief (geen overlap met trend signals)
+        if (richRegime.state === 'range' && !bullRegime && !bearRegime) {
+          const mrSig = generateMeanReversionSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes);
+          if (mrSig) {
+            // Block short scalp if shorts disabled
+            if (mrSig.side === 'short' && !this.opts.enableShorts) {
+              // skip
+            } else {
+              mrSig.btcChange1h = btcChange1h;
+              candidates.push({ asset: assetCfg, sig: mrSig });
             }
           }
         }

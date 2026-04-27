@@ -485,3 +485,76 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
     timestamp: Date.now(),
   };
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  V39 — Mean-reversion scalper for RANGE-bound markets
+//  Activates only when regimeClassifier reports state='range'.
+//  Logic: fade BB extremes met RSI confirmation.
+//    Long  : RSI<25 + price below BB lower → bounce trade
+//    Short : RSI>75 + price above BB upper → fade trade
+//  TP: BB middle (mean target), SL: 1.8×ATR. Hard time-exit ≤6 bars.
+// ═══════════════════════════════════════════════════════════════
+export function generateMeanReversionSignal(asset, closes, highs, lows, volumes, opts = {}) {
+  const n = closes.length - 1;
+  if (n < 50) return null;
+  const cur = closes[n];
+  const ATR = calcATR(highs, lows, closes, 14);
+  if (!ATR || ATR <= 0) return null;
+  const RSI = rsi(closes, 14);
+  const bb = bollingerBands(closes, 20, 2);
+  if (isNaN(bb.upper)) return null;
+
+  const VR = volumeRatio(volumes, 20);
+  if (VR < 0.8) return null;
+
+  const atrPct = atrPercentile(highs, lows, closes, 50);
+  if (atrPct > 80) return null;
+
+  let side, sl, tp, rationale;
+
+  if (RSI < 25 && cur <= bb.lower * 1.001) {
+    side = 'long';
+    sl = cur - ATR * 1.8;
+    tp = bb.middle;
+    rationale = `RSI=${RSI.toFixed(1)} oversold + BB-lower touch`;
+  } else if (RSI > 75 && cur >= bb.upper * 0.999) {
+    side = 'short';
+    sl = cur + ATR * 1.8;
+    tp = bb.middle;
+    rationale = `RSI=${RSI.toFixed(1)} overbought + BB-upper touch`;
+  } else {
+    return null;
+  }
+
+  const slDist = Math.abs(cur - sl);
+  const tpDist = Math.abs(cur - tp);
+  const rr = tpDist / Math.max(slDist, 1e-9);
+  if (rr < 1.0) return null;
+
+  const feeCost = 2 * FEE_RATE;
+  if (tpDist / cur < feeCost * 2.5) return null;
+
+  const conf = RSI < 20 || RSI > 80 ? 5 : 4;
+
+  return {
+    action: side === 'long' ? 'BUY' : 'SHORT',
+    side,
+    asset:  asset.id,
+    strategy: 'mean-reversion',
+    conf,
+    qualityScore: 3.0,
+    rr: +rr.toFixed(2),
+    score100: 50,
+    price: cur,
+    sl: +sl.toFixed(asset.pricePrecision),
+    tp: +tp.toFixed(asset.pricePrecision),
+    atr: ATR,
+    atrPercentile: +atrPct.toFixed(0),
+    rationale,
+    maxBars: 6,
+    factors: { rsi: +RSI.toFixed(1), bbDistPct: +((cur - bb.middle) / bb.middle * 100).toFixed(2) },
+    indicators: { rsi: +RSI.toFixed(1) },
+    volRegime: 'ranging',
+    timestamp: Date.now(),
+  };
+}
