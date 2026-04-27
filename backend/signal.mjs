@@ -230,13 +230,24 @@ export function generateSignal(asset, closes, highs, lows, volumes, regimeOK, op
   if (atrPctile > 85) qualityScore -= 0.6;  // extreme vol = whipsaw risk
   if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;  // dead market chop
 
-  // Dynamic TP: breakouts get wider TP
+  // V33: Asymmetric SL/TP per regime — strong trend krijgt wijdere TP
+  // Strong-trend (ADX>30): TP boost 25%, SL tighter 10%
+  // Normal-trend (ADX 20-30): baseline
+  // Weak (ADX<20): TP shorter (sneller verzilveren), SL wider
   let dynTpM = asset.tpM;
+  let dynSlM = asset.slM;
+  if (ADX > 30) {
+    dynTpM *= 1.25;
+    dynSlM *= 0.90;
+  } else if (ADX < 20) {
+    dynTpM *= 0.85;
+    dynSlM *= 1.10;
+  }
   if (breakout.breakout) dynTpM *= 1.20;
   if (atrPctile > 70) dynTpM *= 1.10;
 
-  const sl    = cur - ATR * asset.slM;       // V17: 5m ATR (consistent met TP)
-  const tp    = cur + ATR * dynTpM;         // V17: 5m ATR (bereikbaar in MAX_BARS window)
+  const sl    = cur - ATR * dynSlM;
+  const tp    = cur + ATR * dynTpM;
   const slDist = Math.abs(cur - sl);
   const tpDist = Math.abs(tp - cur);
   const rr    = tpDist / Math.max(slDist, 1e-9);
@@ -425,14 +436,22 @@ export function generateShortSignal(asset, closes, highs, lows, volumes, regimeO
   if (atrPctile > 85) qualityScore -= 0.6;
   if (atrPctile < 10 && ADX < 22) qualityScore -= 0.4;
 
-  // Dynamic TP: breakouts get wider TP
+  // V33: Asymmetric SL/TP per regime — strong trend krijgt wijdere TP
   let dynTpM = asset.tpM;
+  let dynSlM = asset.slM;
+  if (ADX > 30) {
+    dynTpM *= 1.25;
+    dynSlM *= 0.90;
+  } else if (ADX < 20) {
+    dynTpM *= 0.85;
+    dynSlM *= 1.10;
+  }
   if (breakout.breakout) dynTpM *= 1.20;
   if (atrPctile > 70) dynTpM *= 1.10;
 
   // Short: SL above entry, TP below entry
-  const sl    = cur + ATR * asset.slM;      // V17: 5m ATR (consistent met TP)
-  const tp    = cur - ATR * dynTpM;         // V17: 5m ATR (bereikbaar in MAX_BARS window)
+  const sl    = cur + ATR * dynSlM;
+  const tp    = cur - ATR * dynTpM;
   const slDist = Math.abs(sl - cur);
   const tpDist = Math.abs(cur - tp);
   const rr    = tpDist / Math.max(slDist, 1e-9);
