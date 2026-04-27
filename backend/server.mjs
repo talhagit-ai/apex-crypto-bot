@@ -410,6 +410,117 @@ app.post('/api/liquidate-orphans', async (_req, res) => {
   }
 });
 
+// V29c: GET /api/risk-snapshot — full risk + state overview voor monitoring
+app.get('/api/risk-snapshot', async (_req, res) => {
+  try {
+    const prices = buffer.currentPrices();
+    const equity = engine.equity(prices);
+    const startCap = engine.riskState.startCapital || engine.capital;
+    const drawdownPct = startCap > 0 ? ((startCap - equity) / startCap) * 100 : 0;
+    const exitedTrades = engine.trades.filter(t => ['SELL','COVER'].includes(t.side));
+    const recent20 = exitedTrades.slice(-20);
+    const wins20 = recent20.filter(t => (t.pnl || 0) > 0);
+    const recentWR = recent20.length ? +(wins20.length / recent20.length * 100).toFixed(1) : 0;
+    const recent20PnL = recent20.reduce((s,t) => s + (t.pnl || 0), 0);
+    let availableMargin = null;
+    try {
+      if (futures.enabled) {
+        const accounts = await futures._request('GET', '/accounts');
+        availableMargin = accounts?.accounts?.flex?.availableMargin ?? null;
+      }
+    } catch (_) {}
+    res.json({
+      ok: true,
+      timestamp: Date.now(),
+      equity: +equity.toFixed(2),
+      cash: +engine.cash.toFixed(2),
+      startCapital: +startCap.toFixed(2),
+      drawdownPct: +drawdownPct.toFixed(2),
+      pnlTotal: +(equity - startCap).toFixed(2),
+      positions: Object.entries(engine.positions).map(([id, p]) => ({
+        id, side: p.side, qty: p.qty, entry: p.entry, sl: p.sl, tp: p.tp,
+        peak: p.peak, partial1Done: p.partial1Done, partial2Done: p.partial2Done,
+        paperOnly: p.paperOnly,
+      })),
+      risk: {
+        dailyLoss: +(engine.riskState.dailyLoss * 100).toFixed(2),
+        weeklyLoss: +(engine.riskState.weeklyLoss * 100).toFixed(2),
+        riskReduction: engine.riskState.riskReduction,
+        killed: engine.riskState.killed,
+        totalConsecutiveLosses: engine.riskState.totalConsecutiveLosses,
+        consecutiveLossesByAsset: engine.riskState.consecutiveLosses || {},
+      },
+      recent20: { trades: recent20.length, winRate: recentWR, pnl: +recent20PnL.toFixed(2) },
+      regimes: engine.regimes,
+      enableShorts: engine.opts.enableShorts,
+      futuresAvailableMargin: availableMargin,
+      tickCount,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, err: e.message });
+  }
+});
+
+// V29c: POST /api/halt-all — emergency stop: sluit ALLE posities + disable nieuwe trades
+app.post('/api/halt-all', async (_req, res) => {
+  log.warn('HALT-ALL triggered');
+  const summary = { spot: [], futures: [], engineDisabled: false };
+  try {
+    // 1. Disable nieuwe trades direct in engine opts
+    engine.opts.enableShorts = false;
+    summary.engineDisabled = true;
+
+    // 2. Sluit alle spot longs
+    const prices = buffer.currentPrices();
+    for (const [assetId, pos] of Object.entries(engine.positions)) {
+      if (pos.side === 'short' || pos.paperOnly) continue;
+      try {
+        const price = prices[assetId] || pos.entry;
+        const result = await orders.closePosition(assetId, pos.qty, price, 'HALT_ALL');
+        const pnl = pos.qty * ((result?.fillPrice || price) - pos.entry);
+        engine.cash += pos.qty * (result?.fillPrice || price);
+        delete engine.positions[assetId];
+        summary.spot.push({ assetId, qty: pos.qty, fillPrice: result?.fillPrice, pnl: +pnl.toFixed(2) });
+      } catch (e) {
+        summary.spot.push({ assetId, error: e.message });
+      }
+    }
+
+    // 3. Sluit alle Kraken Futures posities (incl orphans)
+    if (futures.enabled) {
+      try {
+        const openFutures = await futures.getPositions();
+        for (const fp of openFutures) {
+          const assetId = Object.entries(FUTURES_SYMBOL).find(([, sym]) => sym === fp.symbol)?.[0];
+          const qty = Math.abs(parseFloat(fp.size));
+          const side = (fp.side || '').toLowerCase();
+          try {
+            if (side === 'short') {
+              await futures.closeShort(assetId || fp.symbol, qty);
+            } else {
+              await futures._request('POST', '/sendorder', {
+                orderType: 'mkt', symbol: fp.symbol, side: 'sell', size: String(qty),
+              });
+            }
+            if (assetId && engine.positions[assetId]) _rollbackPosition(assetId, engine.positions[assetId]);
+            summary.futures.push({ symbol: fp.symbol, assetId, qty, side });
+          } catch (e) {
+            summary.futures.push({ symbol: fp.symbol, error: e.message });
+          }
+        }
+      } catch (e) {
+        summary.futures.push({ error: `getPositions: ${e.message}` });
+      }
+    }
+
+    reportError(`HALT-ALL uitgevoerd: ${summary.spot.length} spot + ${summary.futures.length} futures gesloten. enableShorts=false. Restart bot om weer te activeren.`);
+    res.json({ ok: true, summary });
+  } catch (e) {
+    log.error('HALT-ALL failed', { err: e.message });
+    res.status(500).json({ ok: false, err: e.message, summary });
+  }
+});
+
 // POST /api/force-close/:asset — handmatig een positie sluiten (voor vastzittende posities)
 app.post('/api/force-close/:asset', async (req, res) => {
   const assetId = req.params.asset;
