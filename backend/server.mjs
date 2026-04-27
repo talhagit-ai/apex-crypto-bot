@@ -231,6 +231,44 @@ app.post('/api/test-futures', async (_req, res) => {
   }
 });
 
+// GET /api/futures-positions — list all open Kraken Futures positions
+app.get('/api/futures-positions', async (_req, res) => {
+  try {
+    if (!futures.enabled) return res.json({ ok: false, err: 'Futures keys not configured' });
+    const positions = await futures.getPositions();
+    res.json({ ok: true, count: positions.length, positions });
+  } catch (e) {
+    res.json({ ok: false, err: e.message });
+  }
+});
+
+// POST /api/futures-close-all — emergency close all open futures positions
+app.post('/api/futures-close-all', async (_req, res) => {
+  try {
+    if (!futures.enabled) return res.json({ ok: false, err: 'Futures keys not configured' });
+    const positions = await futures.getPositions();
+    const results = [];
+    for (const p of positions) {
+      try {
+        const symbol = p.symbol;
+        const assetId = Object.entries(FUTURES_SYMBOL).find(([, sym]) => sym === symbol)?.[0];
+        const qty = Math.abs(parseFloat(p.size));
+        const side = p.side?.toLowerCase();
+        const closeSide = side === 'short' ? 'buy' : 'sell';
+        const data = await futures._request('POST', '/sendorder', {
+          orderType: 'mkt', symbol, side: closeSide, size: String(qty),
+        });
+        results.push({ symbol, assetId, qty, closeSide, orderId: data.sendStatus?.order_id, status: data.sendStatus?.status });
+      } catch (e) {
+        results.push({ symbol: p.symbol, error: e.message });
+      }
+    }
+    res.json({ ok: true, closed: results.length, results });
+  } catch (e) {
+    res.json({ ok: false, err: e.message });
+  }
+});
+
 // Telegram webhook endpoint
 app.post('/telegram-webhook', (req, res) => {
   res.sendStatus(200); // acknowledge immediately
@@ -665,12 +703,24 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
     }
 
     if (pos.side === 'short') {
-      // Pre-flight: check futures margin
-      const marginNeeded = pos.qty * pos.entry * 0.10;
-      if (realBalances.futuresUSD !== null && realBalances.futuresUSD < marginNeeded * 1.2) {
-        log.warn(`SKIP SHORT ${assetId}: insufficient futures margin ($${realBalances.futuresUSD?.toFixed(2)} < $${(marginNeeded*1.2).toFixed(2)})`);
+      // V29: Pre-flight margin check using 30% IM (3x max leverage) + reserve buffer.
+      // Was 10% — caused over-leverage en margin-call zone (availableMargin < 0).
+      // Kraken PF perpetuals: min IM 20%, we use 30% for safety + 20% buffer = 36%.
+      const notional = pos.qty * pos.entry;
+      const marginNeeded = notional * 0.36; // 30% IM + 20% buffer
+      const futBal = realBalances.futuresUSD;
+      if (futBal !== null && futBal < marginNeeded) {
+        log.warn(`SKIP SHORT ${assetId}: insufficient futures margin ($${futBal?.toFixed(2)} < $${marginNeeded.toFixed(2)} for $${notional.toFixed(2)} notional)`);
         _rollbackPosition(assetId, pos, true);
         reportError(`SHORT ${assetId} overgeslagen: onvoldoende futures marge`);
+        continue;
+      }
+      // V29: Also cap total futures notional at 3x balance (3x leverage max combined)
+      const maxNotional = (futBal || 0) * 3;
+      if (notional > maxNotional) {
+        log.warn(`SKIP SHORT ${assetId}: notional $${notional.toFixed(2)} exceeds 3x cap $${maxNotional.toFixed(2)}`);
+        _rollbackPosition(assetId, pos, true);
+        reportError(`SHORT ${assetId} overgeslagen: notional > 3× futures balance`);
         continue;
       }
       // Pre-flight: check futures symbol exists
