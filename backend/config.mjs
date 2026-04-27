@@ -42,8 +42,8 @@ export const PARTIAL1_R   = 1.5;      // V26: walk-forward robust winner — laa
 export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner
 export const PARTIAL2_R   = 2.0;      // V26: PARTIAL1_R + 0.5
 export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
-export const TRAIL_R      = 1.25;     // V28: walk-forward 4-asset universe — TR=1.25 wint consistent op test slice (+4.83% vs +1.2% bij TR=0.8). Alt season: trends langer, ruimere trailing stop beter.
-export const TRAIL_ATR    = 1.5;      // V25/V26: walk-forward bevestigt 1.5 > 2.0/2.5 op test slice
+export const TRAIL_R      = 1.5;      // V40: walk-forward-anchored 4-asset universe wint TR=1.5 (was 1.25) — top-10 alle TR=1.5/1.25 op recent 30d test slice (+7.55% best config)
+export const TRAIL_ATR    = 2.5;      // V40: walk-forward-anchored bevestigt 2.5 (was 1.5). Wijdere ATR-mult laat winners tijdens alt season langer rijden voor TP.
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
@@ -246,7 +246,7 @@ export const GROWTH_CONF_RISK = {
 export const GROWTH_MAX_RISK_PER_TRADE = 0.10;  // V31: 10% max single trade (was 7.5%)
 
 // Faster exits, more trades
-export const GROWTH_TRAIL_R   = 1.25;   // V31: align met V28 TRAIL_R (was 0.8)
+export const GROWTH_TRAIL_R   = 1.5;    // V40: align met V40 TRAIL_R (was 1.25)
 export const GROWTH_MAX_BARS  = 144;    // V31: 12h op 5m (was 10h) — geef trends meer ruimte
 export const GROWTH_MIN_RR    = 1.3;    // V31: 1.3 (was 1.5)
 

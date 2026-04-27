@@ -75,18 +75,23 @@ for (const id of ids) {
 }
 
 // V34: load per-asset overrides from cache for backtest (skip if stale >14d)
+// Set NO_PER_ASSET=true om global params te valideren zonder per-asset overrides.
 let perAsset = {};
-try {
-  const raw = await fs.readFile('./cache/per-asset-params.json', 'utf8');
-  const parsed = JSON.parse(raw);
-  const ageMs = Date.now() - (parsed.timestamp || 0);
-  if (ageMs <= 3 * 24 * 60 * 60 * 1000) {
-    perAsset = parsed.finalParams || {};
-    console.error(`Loaded per-asset params (${Math.round(ageMs/86400000)}d oud): ${Object.keys(perAsset).join(', ') || '(geen)'}`);
-  } else {
-    console.error(`per-asset-params.json is ${Math.round(ageMs/86400000)}d oud — skip`);
-  }
-} catch (_) {}
+if (!process.env.NO_PER_ASSET) {
+  try {
+    const raw = await fs.readFile('./cache/per-asset-params.json', 'utf8');
+    const parsed = JSON.parse(raw);
+    const ageMs = Date.now() - (parsed.timestamp || 0);
+    if (ageMs <= 3 * 24 * 60 * 60 * 1000) {
+      perAsset = parsed.finalParams || {};
+      console.error(`Loaded per-asset params (${Math.round(ageMs/86400000)}d oud): ${Object.keys(perAsset).join(', ') || '(geen)'}`);
+    } else {
+      console.error(`per-asset-params.json is ${Math.round(ageMs/86400000)}d oud — skip`);
+    }
+  } catch (_) {}
+} else {
+  console.error('NO_PER_ASSET=1 — skip per-asset overrides voor global validation');
+}
 
 const engine = new TradingEngine(START, {
   growthMode: true, simMode: true,
