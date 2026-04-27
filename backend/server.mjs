@@ -637,6 +637,12 @@ app.post('/api/reset', async (_req, res) => {
   engine.riskState.startCapital = bal;
   engine.riskState.consecutiveLosses = {};
   engine.riskState.totalConsecutiveLosses = 0;
+  // V40b: ook rolling loss-logs clearen — anders herstelt tick-loop weeklyLoss
+  // direct uit weeklyLossLog (vorige incident-events).
+  engine.riskState.dailyLossLog = [];
+  engine.riskState.weeklyLossLog = [];
+  engine.riskState.pauseUntil = {};
+  engine.riskState.allPausedUntil = 0;
   engine.capital = bal;
   engine.cash = bal;
   engine.positions = {};
