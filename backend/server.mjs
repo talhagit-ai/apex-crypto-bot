@@ -478,6 +478,7 @@ app.get('/api/risk-snapshot', async (_req, res) => {
       },
       recent20: { trades: recent20.length, winRate: recentWR, pnl: +recent20PnL.toFixed(2) },
       regimes: engine.regimes,
+      regimeStates: engine.regimeStates, // V38: 4-state classifier output
       enableShorts: engine.opts.enableShorts,
       futuresAvailableMargin: availableMargin,
       tickCount,

@@ -17,6 +17,7 @@ import { log } from './logger.mjs';
 import { saveTradeAnalytics } from './persistence.mjs';
 import { blockLongDueToFunding, blockShortDueToFunding, shouldBoostShort } from './funding-client.mjs';
 import { isNewsPaused, newsRiskMult } from './news-client.mjs';
+import { classifyRegime } from './regime-classifier.mjs';
 
 /**
  * Trading Engine — manages positions, signals, and exits
@@ -31,6 +32,7 @@ export class TradingEngine {
     this.tickCount = 0;
     this.regimes = {};
     this._regimeRaw = {};    // V12: raw regime per tick (voor hysteresis)
+    this.regimeStates = {};  // V38: 4-state per asset { state, confidence, features }
     this._regimeCount = {};  // V12: consecutive ticks in same regime
     this.opts = opts;            // { simMode: true } disables time-based features
     this.simTime = Date.now();   // Simulated clock (advanced 5min per tick in simMode)
@@ -311,11 +313,16 @@ export class TradingEngine {
           ? { ...asset, ...this.assetOverrides[asset.id] }
           : asset;
 
+        // V38: Run 4-state regime classifier (observability + transition-block)
+        const richRegime = classifyRegime(rd.closes, rd.highs, rd.lows);
+        this.regimeStates[asset.id] = richRegime;
+        const blockTransition = richRegime.state === 'transition' && richRegime.confidence < 0.5;
+
         // ── Try LONG ──────────────────────────────────────────
         const bullRegime = checkRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         const d15 = tf15Data?.[asset.id] || null;
         const confirmedRegime = this.regimes[asset.id];
-        if (bullRegime && confirmedRegime === 'bull') {
+        if (bullRegime && confirmedRegime === 'bull' && !blockTransition) {
           // V32: Funding-rate filter — block long entries on overheated funding (live mode only)
           const fundingBlock = !this.opts.simMode && blockLongDueToFunding(asset.id);
           if (fundingBlock && fundingBlock.blocked) {
@@ -338,7 +345,7 @@ export class TradingEngine {
 
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
-        if (bearRegime && confirmedRegime === 'bear' && this.opts.enableShorts) {
+        if (bearRegime && confirmedRegime === 'bear' && this.opts.enableShorts && !blockTransition) {
           // V32: Funding-rate filter — block short entries on inverse-overheated funding
           const fundingBlock = !this.opts.simMode && blockShortDueToFunding(asset.id);
           if (fundingBlock && fundingBlock.blocked) {
