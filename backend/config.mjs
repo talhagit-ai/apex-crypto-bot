@@ -42,7 +42,7 @@ export const PARTIAL1_R   = 1.5;      // V26: walk-forward robust winner — laa
 export const PARTIAL1_PCT = 0.25;     // V20: kleinere partial, meer runner
 export const PARTIAL2_R   = 2.0;      // V26: PARTIAL1_R + 0.5
 export const PARTIAL2_PCT = 0.25;     // V20: behoudt 50% als runner
-export const TRAIL_R      = 0.8;      // V25/V26: hyperopt 0.8 stabiel beste over train+test (out-of-sample bevestigd)
+export const TRAIL_R      = 1.25;     // V28: walk-forward 4-asset universe — TR=1.25 wint consistent op test slice (+4.83% vs +1.2% bij TR=0.8). Alt season: trends langer, ruimere trailing stop beter.
 export const TRAIL_ATR    = 1.5;      // V25/V26: walk-forward bevestigt 1.5 > 2.0/2.5 op test slice
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
