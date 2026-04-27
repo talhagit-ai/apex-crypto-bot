@@ -28,7 +28,7 @@ export const MODE             = process.env.MODE || 'spot';
 
 // ── Capital & Position ─────────────────────────────────────────
 export const CAPITAL    = Number(process.env.CAPITAL) || 100;
-export const MAX_POS    = 3;          // V18: minder posities = focus op kwaliteit bij klein kapitaal (was 5)
+export const MAX_POS    = 3;          // V18: focus op kwaliteit bij klein kapitaal — XRP toegevoegd maar pos cap blijft 3 om concentratie te voorkomen
 export const MAX_DEPLOY = 0.70;       // V18: 30% cash reserve (was 0.92 — te weinig buffer bij $197)
 export const MAX_SINGLE_PCT = 0.40;   // V17b: max 40% kapitaal per positie (voorkomt ADA/micro-ATR concentratie)
 export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10) — orders daaronder worden geweigerd
@@ -73,8 +73,8 @@ export const FACTOR_WEIGHTS = {
 export const FACTOR_WEIGHT_MAX = Object.values(FACTOR_WEIGHTS).reduce((a, b) => a + b, 0);
 
 // ── Regime Filter ──────────────────────────────────────────────
-export const SLOPE_BARS = 5;          // EMA50 slope lookback (5h instead of 10h — faster regime detection)
-export const ADX_MIN    = 15;         // V17b: zwakkere trends accepteren (was 19)
+export const SLOPE_BARS = 3;          // V27: 3h (was 5h) — snellere regime turn detection in alt season
+export const ADX_MIN    = 12;         // V27: 12 (was 15) — accept zwakkere trends, vooral in DOGE/AVAX consolidations
 
 // ── Timeframe ──────────────────────────────────────────────────
 export const CANDLE_INTERVAL    = '5';    // 5-minute candles for entries
@@ -90,10 +90,13 @@ export const PEAK_HOURS = [
 ];
 export const OFF_PEAK_RISK_MULT = 1.0;  // V17b: geen risicoverlaging buiten peak (was 0.85)
 
-// ── Session Filter (V16: alleen traden tijdens winstgevende sessie) ──
-export const SESSION_FILTER_ENABLED = true;
-export const SESSION_ALLOWED_START  = 8;   // 08:00 UTC (10:00 NL)
-export const SESSION_ALLOWED_END    = 16;  // 16:00 UTC (18:00 NL)
+// ── Session Filter (V27: UIT — bot mist 16h/dag in 24/7 markt) ──
+// V16 had window 8-16 UTC voor "winstgevende sessie" maar in alt season
+// is Asian session (00-08 UTC) juist hoogvolume voor SOL/AVAX/DOGE.
+// Met 24/7 trading + regime filter al actief, is sessie-restrictie pure verlies.
+export const SESSION_FILTER_ENABLED = false;
+export const SESSION_ALLOWED_START  = 0;
+export const SESSION_ALLOWED_END    = 24;
 
 // ── Cooldowns (V16: verkort van 30/15 min) ────────────────────
 export const COOLDOWN_SL_MIN   = 3;   // V17b: sneller re-entry (was 10 min)
@@ -147,8 +150,26 @@ export const ASSETS = [
     corrGroup: 'MED',
     regimeATR: 0.08,
   },
-  // V25 DISABLED — XRPUSDT/ADAUSDT/LINKUSD verloren elk in 90d backtest
-  // /* { id: 'XRPUSDT', krakenSymbol: 'XRP/USD', krakenPair: 'XRPUSD', vol:0.012, slM:2.6, tpM:4.8, corrGroup:'LOW' } */
+  // V27: XRPUSDT teruggezet — market-scan toont bull regime, +5.25% 7d
+  // (V25-disable was gebaseerd op 90d backtest; recent regime is anders)
+  {
+    id: 'XRPUSDT',
+    symbol: 'XRPUSDT',
+    krakenSymbol: 'XRP/USD',
+    krakenPair:   'XRPUSD',
+    category: MODE,
+    vol: 0.012,
+    drift: 0.00035,
+    slM: 2.6,
+    tpM: 4.8,
+    minQty: 1,
+    qtyStep: 1,
+    pricePrecision: 5,
+    color: '#23292f',
+    corrGroup: 'LOW',
+    regimeATR: 0.07,
+  },
+  // V25 DISABLED — ADAUSDT/LINKUSD nog steeds bearish in market-scan
   // /* { id: 'ADAUSDT', krakenSymbol: 'ADA/USD', krakenPair: 'ADAUSD', vol:0.014, slM:2.6, tpM:4.8, corrGroup:'SPEC' } */
   // /* { id: 'LINKUSD', krakenSymbol: 'LINK/USD', krakenPair: 'LINKUSD', vol:0.020, slM:2.3, tpM:4.2, corrGroup:'ALT2' } */
   {
