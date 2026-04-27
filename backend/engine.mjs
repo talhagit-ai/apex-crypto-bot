@@ -16,6 +16,7 @@ import { createRiskState, checkPeriodReset, canOpenPosition, calculatePositionSi
 import { log } from './logger.mjs';
 import { saveTradeAnalytics } from './persistence.mjs';
 import { blockLongDueToFunding, blockShortDueToFunding, shouldBoostShort } from './funding-client.mjs';
+import { isNewsPaused, newsRiskMult } from './news-client.mjs';
 
 /**
  * Trading Engine — manages positions, signals, and exits
@@ -286,6 +287,12 @@ export class TradingEngine {
         btcChange1h = (btcNow - btc1hAgo) / btc1hAgo;
       }
 
+      // V36: News pause hard-block all new entries (live only)
+      if (!this.opts.simMode && isNewsPaused()) {
+        log.info('All entries blocked: news pause active');
+        return;
+      }
+
       // Generate signals and sort by confidence (best first)
       const candidates = [];
       for (const asset of ASSETS) {
@@ -395,6 +402,8 @@ export class TradingEngine {
 
         const posOpts = this.opts.simMode ? { peakMult: 0.85 } : {};
         if (this.opts.growthMode) posOpts.growthMode = true;
+        // V36: news event sizing reduction (post-pause)
+        if (!this.opts.simMode) posOpts.newsRiskMult = newsRiskMult();
         const qty = calculatePositionSize(sig, availableCash, this.riskState, posOpts);
         if (qty <= 0) continue;
 

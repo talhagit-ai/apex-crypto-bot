@@ -24,6 +24,7 @@ import { OrderManager } from './order-manager.mjs';
 import { runOptimization, startOptimizationSchedule, loadParams, loadParamsSync } from './optimizer.mjs';
 import { KrakenFuturesClient, FUTURES_SYMBOL } from './kraken-futures-client.mjs';
 import { startFundingPoller, getFundingCache } from './funding-client.mjs';
+import { startNewsPoller, isNewsPaused, newsRiskMult, getNewsState } from './news-client.mjs';
 import { notifyBuy, notifyShort, notifySell, notifyPartial, notifyStartup, notifyError, notifyFuturesReady, startTelegramChat, handleWebhookUpdate } from './telegram.mjs';
 import { LearningEngine } from './learning.mjs';
 
@@ -481,6 +482,7 @@ app.get('/api/risk-snapshot', async (_req, res) => {
       futuresAvailableMargin: availableMargin,
       tickCount,
       fundingCache: getFundingCache(),
+      news: getNewsState(),
     });
   } catch (e) {
     res.status(500).json({ ok: false, err: e.message });
@@ -1379,6 +1381,9 @@ async function start() {
   // V32: Start funding-rate poller (Kraken Futures public tickers, no auth)
   startFundingPoller();
   log.info('Funding-rate poller started (refresh every 30 min)');
+
+  // V36: Start CryptoPanic news poller (only active als CRYPTOPANIC_API_TOKEN gezet is)
+  startNewsPoller();
 
   // Start Telegram AI chat (webhook mode — no polling conflicts)
   const publicUrl = process.env.PUBLIC_URL || `https://apex-crypto-bot-c3bt.onrender.com`;

@@ -330,8 +330,11 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
     : (signal.regimeStrength || 1.0)
   ));
 
-  // Combined risk amount (V21: BTC cascade multiplier; V31b: streakMult toegevoegd)
-  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult * btcMult * streakMult;
+  // V36: news event sizing reduction (live only, set in opts by server)
+  const newsMult = (opts.newsRiskMult ?? 1.0);
+
+  // Combined risk amount (V21: BTC cascade; V31b: streakMult; V36: newsMult)
+  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult * btcMult * streakMult * newsMult;
 
   // Account for round-trip fees (V11: floor verlaagd van 80% naar 60% — realistischer)
   const qty_raw  = riskAmount / slDist;
