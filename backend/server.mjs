@@ -985,12 +985,58 @@ async function reconcilePositions() {
           }
         }
 
-        // Detect orphaned futures (on Kraken but not in engine)
+        // V29b: Auto-close orphaned futures (on Kraken but not in engine).
+        // Authorized by user: bot mag zelf orphan-posities sluiten om over-leverage
+        // en verloren-tracking te voorkomen.
         for (const [assetId, fp] of Object.entries(futuresMap)) {
           if (!engine.positions[assetId]) {
-            log.warn(`RECONCILE: Kraken Futures has ${assetId} position but engine doesn't — orphan`);
-            reportError(`Wees-positie op Kraken Futures: ${assetId}. Handmatig sluiten!`);
+            const qty = Math.abs(parseFloat(fp.size));
+            const side = (fp.side || '').toLowerCase();
+            log.warn(`RECONCILE: Auto-closing orphan ${side} ${assetId} qty=${qty}`);
+            try {
+              if (side === 'short') {
+                await futures.closeShort(assetId, qty);
+              } else if (side === 'long') {
+                // closeLong = sell to close
+                await futures._request('POST', '/sendorder', {
+                  orderType: 'mkt', symbol: fp.symbol, side: 'sell', size: String(qty),
+                });
+              }
+              reportError(`AUTO-CLOSE: orphan ${side} ${assetId} (${qty}) gesloten`);
+            } catch (err) {
+              log.error(`Auto-close failed for ${assetId}`, { err: err.message });
+              reportError(`AUTO-CLOSE FAILED ${assetId}: ${err.message} — handmatig sluiten op Kraken Futures`);
+            }
           }
+        }
+
+        // V29b: Margin-call protection — als availableMargin negatief, force-close ALLE shorts
+        // om liquidatie te voorkomen.
+        try {
+          const accounts = await futures._request('GET', '/accounts');
+          const flex = accounts?.accounts?.flex;
+          const availableMargin = flex?.availableMargin;
+          if (typeof availableMargin === 'number' && availableMargin < 0) {
+            log.warn(`MARGIN CALL ZONE: availableMargin=$${availableMargin.toFixed(2)} — force-closing all futures`);
+            for (const fp of openFutures) {
+              const assetId = Object.entries(FUTURES_SYMBOL).find(([, sym]) => sym === fp.symbol)?.[0];
+              const qty = Math.abs(parseFloat(fp.size));
+              const side = (fp.side || '').toLowerCase();
+              try {
+                if (side === 'short') await futures.closeShort(assetId || fp.symbol, qty);
+                else await futures._request('POST', '/sendorder', {
+                  orderType: 'mkt', symbol: fp.symbol, side: 'sell', size: String(qty),
+                });
+                // Ook engine position rollbacken als die er nog is
+                if (assetId && engine.positions[assetId]) _rollbackPosition(assetId, engine.positions[assetId]);
+              } catch (err) {
+                log.error(`Margin-call close failed for ${fp.symbol}`, { err: err.message });
+              }
+            }
+            reportError(`MARGIN-CALL: Alle futures geforceerd gesloten (availableMargin was $${availableMargin.toFixed(2)})`);
+          }
+        } catch (e) {
+          log.warn('Margin-call check failed', { err: e.message });
         }
       } catch (e) {
         log.warn('Futures reconciliation failed', { err: e.message });
