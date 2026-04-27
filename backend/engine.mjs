@@ -15,6 +15,7 @@ import { checkRegime, checkBearishRegime, generateSignal, generateShortSignal } 
 import { createRiskState, checkPeriodReset, canOpenPosition, calculatePositionSize, recordTradeResult } from './risk.mjs';
 import { log } from './logger.mjs';
 import { saveTradeAnalytics } from './persistence.mjs';
+import { blockLongDueToFunding, blockShortDueToFunding, shouldBoostShort } from './funding-client.mjs';
 
 /**
  * Trading Engine — manages positions, signals, and exits
@@ -292,34 +293,51 @@ export class TradingEngine {
         const d15 = tf15Data?.[asset.id] || null;
         const confirmedRegime = this.regimes[asset.id];
         if (bullRegime && confirmedRegime === 'bull') {
-          const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
-          if (sig) {
-            if (this.learningEngine) {
-              const learnMult = this.learningEngine.scoreSignal(
-                asset.id, new Date().getUTCHours(), 'bull', sig.volRegime, sig.conf, sig.factors
-              );
-              sig.qualityScore *= learnMult;
-              sig.learnMult = +learnMult.toFixed(2);
+          // V32: Funding-rate filter — block long entries on overheated funding (live mode only)
+          const fundingBlock = !this.opts.simMode && blockLongDueToFunding(asset.id);
+          if (fundingBlock && fundingBlock.blocked) {
+            log.info(`Skip LONG ${asset.id}: funding ${(fundingBlock.fundingRate*100).toFixed(3)}% too crowded`);
+          } else {
+            const sig = generateSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
+            if (sig) {
+              if (this.learningEngine) {
+                const learnMult = this.learningEngine.scoreSignal(
+                  asset.id, new Date().getUTCHours(), 'bull', sig.volRegime, sig.conf, sig.factors
+                );
+                sig.qualityScore *= learnMult;
+                sig.learnMult = +learnMult.toFixed(2);
+              }
+              sig.btcChange1h = btcChange1h;
+              candidates.push({ asset: assetCfg, sig });
             }
-            sig.btcChange1h = btcChange1h;
-            candidates.push({ asset: assetCfg, sig });
           }
         }
 
         // ── Try SHORT ─────────────────────────────────────────
         const bearRegime = checkBearishRegime(rd.closes, rd.highs, rd.lows, asset.regimeATR || 0.05);
         if (bearRegime && confirmedRegime === 'bear' && this.opts.enableShorts) {
-          const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
-          if (sig) {
-            if (this.learningEngine) {
-              const learnMult = this.learningEngine.scoreSignal(
-                asset.id, new Date().getUTCHours(), 'bear', sig.volRegime, sig.conf, sig.factors
-              );
-              sig.qualityScore *= learnMult;
-              sig.learnMult = +learnMult.toFixed(2);
+          // V32: Funding-rate filter — block short entries on inverse-overheated funding
+          const fundingBlock = !this.opts.simMode && blockShortDueToFunding(asset.id);
+          if (fundingBlock && fundingBlock.blocked) {
+            log.info(`Skip SHORT ${asset.id}: funding ${(fundingBlock.fundingRate*100).toFixed(3)}% inverse-crowded`);
+          } else {
+            const sig = generateShortSignal(assetCfg, b.closes, b.highs, b.lows, b.volumes, true, sigOpts, rd, d15);
+            if (sig) {
+              if (this.learningEngine) {
+                const learnMult = this.learningEngine.scoreSignal(
+                  asset.id, new Date().getUTCHours(), 'bear', sig.volRegime, sig.conf, sig.factors
+                );
+                sig.qualityScore *= learnMult;
+                sig.learnMult = +learnMult.toFixed(2);
+              }
+              // V32: boost short conviction when funding very high (squeeze risk)
+              if (!this.opts.simMode && shouldBoostShort(asset.id)) {
+                sig.qualityScore += 0.6;
+                sig.fundingBoost = true;
+              }
+              sig.btcChange1h = btcChange1h;
+              candidates.push({ asset: assetCfg, sig });
             }
-            sig.btcChange1h = btcChange1h;
-            candidates.push({ asset: assetCfg, sig });
           }
         }
 
