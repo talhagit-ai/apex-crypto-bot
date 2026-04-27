@@ -255,6 +255,29 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
   const streak = Math.min(state.totalConsecutiveLosses || 0, 4);
   const dynamicMult = DYNAMIC_RISK[streak] ?? 1.0;
 
+  // V31b AGGRESSIVE: Hot-streak amplifier + cold-streak protector.
+  // Read recent trades to count win-streak (consecutive wins).
+  // Hot: 3 wins op rij → next position 1.5×, 4+ wins → 1.75×
+  // Cold: na 3 losses, dynamicMult zorgt al voor 0.7×; we voegen extra 0.5× toe
+  //       en force MIN_CONF=5 (raised in caller).
+  let streakMult = 1.0;
+  const recent = state.recentTrades || [];
+  if (recent.length >= 3) {
+    let winStreak = 0, lossStreak = 0;
+    for (let i = recent.length - 1; i >= 0 && i >= recent.length - 5; i--) {
+      if (recent[i].win) {
+        if (lossStreak > 0) break;
+        winStreak++;
+      } else {
+        if (winStreak > 0) break;
+        lossStreak++;
+      }
+    }
+    if (winStreak >= 4)      streakMult = 1.75;
+    else if (winStreak >= 3) streakMult = 1.50;
+    else if (lossStreak >= 3) streakMult = 0.50; // extra protectie bovenop dynamicMult
+  }
+
   // V19: Kelly factor — schaal op basis van rolling win rate over laatste trades
   let kellyMult = 1.0;
   const closed = (state.recentTrades || []).filter(t => typeof t.pnl === 'number');
@@ -307,8 +330,8 @@ export function calculatePositionSize(signal, capital, state, opts = {}) {
     : (signal.regimeStrength || 1.0)
   ));
 
-  // Combined risk amount (V21: BTC cascade multiplier toegevoegd)
-  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult * btcMult;
+  // Combined risk amount (V21: BTC cascade multiplier; V31b: streakMult toegevoegd)
+  const riskAmount = capital * baseRisk * dynamicMult * peakMult * cbMult * volMult * rsMult * kellyMult * btcMult * streakMult;
 
   // Account for round-trip fees (V11: floor verlaagd van 80% naar 60% — realistischer)
   const qty_raw  = riskAmount / slDist;

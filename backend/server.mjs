@@ -814,11 +814,11 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
     }
 
     if (pos.side === 'short') {
-      // V29: Pre-flight margin check using 30% IM (3x max leverage) + reserve buffer.
-      // Was 10% — caused over-leverage en margin-call zone (availableMargin < 0).
-      // Kraken PF perpetuals: min IM 20%, we use 30% for safety + 20% buffer = 36%.
+      // V31 AGGRESSIVE: pre-flight margin check 30% IM + 10% buffer = 33% (was 36%).
+      // Notional cap 4× balance (was 3×) — compromis tussen agressief en veilig.
+      // Volledig 5× zoals plan vroeg = te dicht bij liquidatie-zone na vandaag's incident.
       const notional = pos.qty * pos.entry;
-      const marginNeeded = notional * 0.36; // 30% IM + 20% buffer
+      const marginNeeded = notional * 0.33; // 30% IM + 10% buffer
       const futBal = realBalances.futuresUSD;
       if (futBal !== null && futBal < marginNeeded) {
         log.warn(`SKIP SHORT ${assetId}: insufficient futures margin ($${futBal?.toFixed(2)} < $${marginNeeded.toFixed(2)} for $${notional.toFixed(2)} notional)`);
@@ -826,12 +826,12 @@ async function _syncOrders(prevPositions, prevQtySnapshot, prevPositionData, bar
         reportError(`SHORT ${assetId} overgeslagen: onvoldoende futures marge`);
         continue;
       }
-      // V29: Also cap total futures notional at 3x balance (3x leverage max combined)
-      const maxNotional = (futBal || 0) * 3;
+      // V31: cap total futures notional at 4x balance
+      const maxNotional = (futBal || 0) * 4;
       if (notional > maxNotional) {
-        log.warn(`SKIP SHORT ${assetId}: notional $${notional.toFixed(2)} exceeds 3x cap $${maxNotional.toFixed(2)}`);
+        log.warn(`SKIP SHORT ${assetId}: notional $${notional.toFixed(2)} exceeds 4x cap $${maxNotional.toFixed(2)}`);
         _rollbackPosition(assetId, pos, true);
-        reportError(`SHORT ${assetId} overgeslagen: notional > 3× futures balance`);
+        reportError(`SHORT ${assetId} overgeslagen: notional > 4× futures balance`);
         continue;
       }
       // Pre-flight: check futures symbol exists

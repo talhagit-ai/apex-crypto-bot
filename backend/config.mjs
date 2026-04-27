@@ -28,14 +28,14 @@ export const MODE             = process.env.MODE || 'spot';
 
 // ── Capital & Position ─────────────────────────────────────────
 export const CAPITAL    = Number(process.env.CAPITAL) || 100;
-export const MAX_POS    = 3;          // V18: focus op kwaliteit bij klein kapitaal — XRP toegevoegd maar pos cap blijft 3 om concentratie te voorkomen
-export const MAX_DEPLOY = 0.70;       // V18: 30% cash reserve (was 0.92 — te weinig buffer bij $197)
-export const MAX_SINGLE_PCT = 0.40;   // V17b: max 40% kapitaal per positie (voorkomt ADA/micro-ATR concentratie)
-export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10) — orders daaronder worden geweigerd
+export const MAX_POS    = 5;          // V31 AGGRESSIVE: 5 simultane posities (was 3) — meer kansen, één per asset blijft
+export const MAX_DEPLOY = 0.85;       // V31: 15% cash reserve (was 30%) — meer kapitaal in spel voor compounding
+export const MAX_SINGLE_PCT = 0.50;   // V31: tot 50% per positie — concentreer op proven edge (XRP) toegestaan
+export const MIN_ORDER_USD  = 10;     // Kraken minimum notional per order (~$10)
 
 // ── Signal Requirements ────────────────────────────────────────
-export const MIN_CONF   = 4;          // V13: conf=4 is 67% kwaliteit (was 5 — te streng, miste goede setups)
-export const MIN_RR     = 1.5;        // V26: walk-forward robust winner. V25 (RR=2.0) scoort test=-1.45% out-of-sample, RR=1.5 scoort test=+1.2%. Recent regime tolereert losser RR.
+export const MIN_CONF   = 3;          // V31 AGGRESSIVE: 3 conf-floor (was 4) — meer trades, lagere drempel; quality boost via V30 indicators
+export const MIN_RR     = 1.3;        // V31 AGGRESSIVE: 1.3 (was 1.5) — sneller bevestigde setups, accept marginaal lagere edge per trade voor hogere trade-frequentie
 
 // ── Exit Mechanics (V12 Edge + Double Partial) ─────────────────
 export const PARTIAL1_R   = 1.5;      // V26: walk-forward robust winner — laat winners langer lopen voor partial. V25 (P1=0.75) was gefit op train, faalde op test.
@@ -47,11 +47,13 @@ export const TRAIL_ATR    = 1.5;      // V25/V26: walk-forward bevestigt 1.5 > 2
 export const MAX_BARS     = 96;       // V17: 8h (was 72=6h) — met 5m-ATR TP heeft prijs meer tijd nodig
 
 // ── Risk Management ────────────────────────────────────────────
-export const DAILY_LOSS_LIMIT_1  = 0.060;  // V16: 6% → reduce risk 50% (was 4% — 2 trades triggerde al met €200)
-export const DAILY_LOSS_LIMIT_2  = 0.100;  // V16: 10% → stop 24h (was 6% — te krap voor crypto)
-export const WEEKLY_LOSS_LIMIT_1 = 0.080;  // V16: 8% → reduce size 50% (was 5%)
-export const WEEKLY_LOSS_LIMIT_2 = 0.150;  // V16: 15% → stop entire week (was 8%)
-export const KILL_SWITCH_PCT     = 0.20;   // V16: 20% drawdown → full stop (was 12%)
+// V31 AGGRESSIVE: ruimere CB-niveaus voor hogere variance-tolerantie.
+// Compensatie: hot/cold-streak modifier in risk.mjs en V29 margin-cap in server.mjs blijven streng.
+export const DAILY_LOSS_LIMIT_1  = 0.080;  // V31: 8% → reduce risk 50% (was 6%)
+export const DAILY_LOSS_LIMIT_2  = 0.140;  // V31: 14% → stop 24h (was 10%)
+export const WEEKLY_LOSS_LIMIT_1 = 0.120;  // V31: 12% → reduce size 50% (was 8%)
+export const WEEKLY_LOSS_LIMIT_2 = 0.220;  // V31: 22% → stop entire week (was 15%)
+export const KILL_SWITCH_PCT     = 0.30;   // V31: 30% drawdown → full stop (was 20%)
 export const LOSS_LIMIT          = 6;      // V17b: meer kansen per asset (was 4)
 export const PAUSE_MINUTES       = 30;     // V17b: kortere pauze (was 60)
 export const TOTAL_LOSS_LIMIT    = 6;      // V18: strenger bij klein kapitaal (was 10 — 10×$8=$80=40% drawdown)
@@ -234,26 +236,26 @@ export const FRONTEND_PORT  = 5173;
 // GROWTH_MODE=true activates aggressive sizing, compounding, and wider limits
 export const GROWTH_MODE = process.env.GROWTH_MODE === 'true';
 
-// Kelly-based sizing (quarter-Kelly at 49%WR / 3:1 R:R)
+// V31 AGGRESSIVE: Kelly-based sizing — half-Kelly bij 49%WR / 1.5:1 R:R
 export const GROWTH_CONF_RISK = {
-  3: 0.020,   // V13: 2.0% (was 1.5%)
-  4: 0.040,   // V13: 4.0% (was 3.0%) — primaire entry level
-  5: 0.060,   // V13: 6.0% (was 5.0%)
-  6: 0.075,   // V13: 7.5% (was 6.5%) — full Kelly bij perfecte setup
+  3: 0.030,   // V31: 3.0% (was 2.0%)
+  4: 0.050,   // V31: 5.0% (was 4.0%)
+  5: 0.080,   // V31: 8.0% (was 6.0%)
+  6: 0.100,   // V31: 10% (was 7.5%) — full conviction op 6/6 setup
 };
-export const GROWTH_MAX_RISK_PER_TRADE = 0.075;  // V13: was 0.065
+export const GROWTH_MAX_RISK_PER_TRADE = 0.10;  // V31: 10% max single trade (was 7.5%)
 
 // Faster exits, more trades
-export const GROWTH_TRAIL_R   = 0.8;    // V26: align met TRAIL_R (walk-forward bevestigt 0.8 stabiel)
-export const GROWTH_MAX_BARS  = 120;    // V17: 10h op 5m candles (was 60=5h — te kort voor 5m ATR TP)
-export const GROWTH_MIN_RR    = 1.5;    // V26: walk-forward toont RR=1.5 > 2.0 op test slice in recent regime
+export const GROWTH_TRAIL_R   = 1.25;   // V31: align met V28 TRAIL_R (was 0.8)
+export const GROWTH_MAX_BARS  = 144;    // V31: 12h op 5m (was 10h) — geef trends meer ruimte
+export const GROWTH_MIN_RR    = 1.3;    // V31: 1.3 (was 1.5)
 
-// Wider circuit breakers
-export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.060;  // V16: was 0.040
-export const GROWTH_DAILY_LOSS_LIMIT_2  = 0.100;  // V16: was 0.060
-export const GROWTH_WEEKLY_LOSS_LIMIT_1 = 0.100;  // V16: was 0.080
-export const GROWTH_WEEKLY_LOSS_LIMIT_2 = 0.180;  // V16: was 0.120
-export const GROWTH_KILL_SWITCH_PCT     = 0.250;  // V16: was 0.150
+// V31 AGGRESSIVE: ruimere CBs in growth mode
+export const GROWTH_DAILY_LOSS_LIMIT_1  = 0.080;  // V31: was 0.060
+export const GROWTH_DAILY_LOSS_LIMIT_2  = 0.140;  // V31: was 0.100
+export const GROWTH_WEEKLY_LOSS_LIMIT_1 = 0.120;  // V31: was 0.100
+export const GROWTH_WEEKLY_LOSS_LIMIT_2 = 0.220;  // V31: was 0.180
+export const GROWTH_KILL_SWITCH_PCT     = 0.30;   // V31: was 0.25
 
 // Relaxed correlation in growth mode (BTC+ETH samen toegestaan bij groter kapitaal)
 export const GROWTH_CORRELATION_RULES = {
